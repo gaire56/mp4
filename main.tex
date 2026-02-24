@@ -1,267 +1,388 @@
 \documentclass[conference]{IEEEtran}
+
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{tikz-cd}
+
 \title{Explainable AI for Effective Malware Detection and Triage}
+
 \author{\IEEEauthorblockN{Ananta Prasad Gaire, Aleksandar Shurbevski, Shozo Naito}
 \IEEEauthorblockA{Kyoto College of Graduate Studies in Informatics (KCGI)\\
 Kyoto, Japan\\
 Emails: st052439@m2.kcg.edu, a\_shurbevski@kcg.edu, s\_naito@kcg.edu}}
+
 \begin{document}
+
 \maketitle
+
 \begin{abstract}
-Cybersecurity operations~\cite{ember2024, SZS25} increasingly rely on machine learning to triage large volumes of potentially malicious artifacts, yet high-performing deep models are often difficult to trust in Security Operations Centers (SOCs) because their predictions can be opaque. Analysts must justify actions such as quarantining endpoints or blocking suspicious communication, which requires evidence beyond a single probability score. This research develops and evaluates a unified Explainable AI (XAI) pipeline for two threat vectors: static malware detection from Portable Executable (PE) files and phishing email detection from natural-language email text. Across both tasks, the goal is not only strong detection performance, but also practical, analyst-oriented explanations that support transparent and defensible triage. Moreover, SOC deployment often depends on the precision--recall trade-off, and we report results with respect to operational threshold values.
+Cybersecurity operations increasingly rely on machine learning to triage large volumes of potentially malicious artifacts, yet high-performing deep models are often difficult to trust in Security Operations Centers (SOCs) because their predictions can be opaque. Analysts must justify actions such as quarantining endpoints or blocking suspicious communication, which requires evidence beyond a single probability score. This research develops and evaluates a unified Explainable AI (XAI) pipeline for two threat vectors: static malware detection from Portable Executable (PE) files and phishing email detection from natural-language email text. Across both tasks, the goal is not only strong detection performance, but also practical, analyst-oriented explanations that support transparent and defensible triage. Moreover, SOC deployment often depends on the precision--recall trade-off, and we report results with respect to operational threshold values.
+
 For malware detection, we build an explainable multimodal pipeline on the EMBER2024 PE feature set by representing each executable through (i) high-dimensional tabular PE features and (ii) section-level structural patterns rendered as compact “section images.” We implement a multimodal fusion model that merges these two representations for final malware/benign classification. On the held-out test set, the fusion model achieves Accuracy = 0.9406 and malware F1 = 0.9392 under the default decision rule, outperforming a tabular-only baseline. To close the trust gap, we use Integrated Gradients (IG) for global and per-file attributions on tabular evidence and Grad-CAM heatmaps on section images to highlight structural regions driving the malware decision.
+
 For phishing email detection, we utilize fine-tuned transformer models to classify natural language text. The classifier achieves strong test performance (accuracy $\approx$ 0.9926, F1 $\approx$ 0.9900) under the default threshold, with threshold tuning showing comparable generalization. We operationalize explainability through two complementary streams: token-level SHAP explanations that indicate words increasing or decreasing phishing probability, and attention-based token extraction to provide a second perspective. To evaluate explanation behavior, we measure faithfulness using deletion/insertion tests and stability using top-k token agreement, observing a practical trade-off where attention is typically more stable, while SHAP provides clearer signed contribution signals.
+
 Overall, this research demonstrates that high-performing threat detection can be paired with analyst-friendly explanations across heterogeneous modalities. The resulting outputs calibrated probability scores, ranked feature/token attributions, and visual heatmaps support transparent security reporting and more trustworthy triage decisions.
 \end{abstract}
 
-
 \section{Introduction}
-
 
 \subsection{Background and Motivation}
 
-Modern organizations continuously receive, generate, and execute large volumes of digital artifacts through routine workflows such as software distribution, email exchange, web browsing, and endpoint updates. In these workflows, two artifact types are especially important from a defensive standpoint: Windows Portable Executable (PE) files and emails. PE files remain a dominant delivery format for Windows malware because they are the native executable structure of the operating system and can be distributed through common channels such as attachments, downloads, or bundled installers. Emails remain one of the most widely used communication mechanisms in enterprises~[24], but they are also one of the most exploited~[25]: phishing messages imitate legitimate business requests (e.g., invoices, account verification, internal approvals) to persuade recipients into unsafe actions such as opening attachments, clicking links, or disclosing credentials. At Security Operations Center (SOCs) scale, the challenge is not only detecting threats but doing so at a speed and volume that manual inspection cannot match.
-To handle this scale, SOCs increasingly deploy~[26] machine learning (ML) systems to automate triage ranking suspicious files and messages so analysts can prioritize investigations. Deep learning models are particularly attractive in this setting because they can learn complex interactions in high-dimensional data and capture semantic patterns in text that rule-based filters and signature matching often miss~[27]. Yet, cybersecurity operations is a high-stakes environment: model outputs often influence decisions such as quarantining endpoints, blocking delivery, or escalating incidents. These actions require accountability and evidence. If a model behaves as a black box and only provides a label (e.g., malware/benign or phishing/safe), analysts face a trust gap: either they accept a decision they cannot justify, or they must re-investigate alerts from scratch, which reduces the operational value of automation. This trust gap becomes even more critical as threats evolve and adversaries intentionally manipulate surface cues to evade detection.
+Modern organizations continuously receive, generate, and execute large volumes of digital artifacts through routine workflows such as software distribution, email exchange, web browsing, and endpoint updates. In these workflows, two artifact types are especially important from a defensive standpoint: Windows Portable Executable (PE) files and emails. PE files remain a dominant delivery format for Windows malware because they are the native executable structure of the operating system and can be distributed through common channels such as attachments, downloads, or bundled installers. Emails remain one of the most widely used communication mechanisms in enterprises~\cite{TRG2024-28}, but they are also one of the most exploited~\cite{DBIR2025}: phishing messages imitate legitimate business requests (e.g., invoices, account verification, internal approvals) to persuade recipients into unsafe actions such as opening attachments, clicking links, or disclosing credentials. At Security Operations Center (SOCs) scale, the challenge is not only detecting threats but doing so at a speed and volume that manual inspection cannot match.
+
+To handle this scale, SOCs increasingly deploy~\cite{SDRS2025} machine learning (ML) systems to automate triage ranking suspicious files and messages so analysts can prioritize investigations. Deep learning models are particularly attractive in this setting because they can learn complex interactions in high-dimensional data and capture semantic patterns in text that rule-based filters and signature matching often miss~\cite{DSR2025ai}. Yet, cybersecurity operations is a high-stakes environment: model outputs often influence decisions such as quarantining endpoints, blocking delivery, or escalating incidents. These actions require accountability and evidence. If a model behaves as a black box and only provides a label (e.g., malware/benign or phishing/safe), analysts face a trust gap: either they accept a decision they cannot justify, or they must re-investigate alerts from scratch, which reduces the operational value of automation. This trust gap becomes even more critical as threats evolve and adversaries intentionally manipulate surface cues to evade detection.
 
 \subsection{Explainable AI and Why It Matters in Cybersecurity}
 
 Explainable AI (XAI) refers to a family of methods and system designs intended to make the behavior of machine-learning models understandable to humans. In practical terms, XAI aims to answer questions such as:
+
 Which inputs contributed most to this prediction?
+
 What evidence increased or decreased the model’s confidence? and
+
 What parts of the input were most influential?
+
 In this thesis, we treat explainability as evidence generation: explanations are produced as structured artifacts that accompany predictions and are intended to support verification, reporting, and analyst reasoning.
-This project adopts widely used attribution-based XAI methods because they can be applied directly to trained models without redesigning the model architecture. For tabular feature inputs and other structured representations, additive feature attribution approaches such as SHapley Additive exPlanations (SHAP)~[5] provide local explanations (why one sample was classified in a certain way) and global summaries (which features are broadly important across many samples). For deep networks, Integrated Gradients~[4] provides principled attributions by accumulating gradients from a baseline input to the actual input, offering a model-sensitive measure of feature influence. For CNN-based components, Grad-CAM produces a saliency heatmap that highlights spatial regions most responsible for a prediction, enabling a visual form of evidence over image-like representations~[3]. These methods are well-established and widely reused, which makes them suitable for an MP-4 research pipeline where both performance and interpretability must be reported in a structured way.
+
+This project adopts widely used attribution-based XAI methods because they can be applied directly to trained models without redesigning the model architecture. For tabular feature inputs and other structured representations, additive feature attribution approaches such as SHapley Additive exPlanations (SHAP)~\cite{LL2017} provide local explanations (why one sample was classified in a certain way) and global summaries (which features are broadly important across many samples). For deep networks, Integrated Gradients~\cite{MAQ2017} provides principled attributions by accumulating gradients from a baseline input to the actual input, offering a model-sensitive measure of feature influence. For CNN-based components, Grad-CAM produces a saliency heatmap that highlights spatial regions most responsible for a prediction, enabling a visual form of evidence over image-like representations~\cite{SCDVPB2017}. These methods are well-established and widely reused, which makes them suitable for an MP-4 research pipeline where both performance and interpretability must be reported in a structured way.
+
 Explainability matters in cybersecurity for three reasons.
+
 First, it supports trust calibration. A high confidence score is not automatically trustworthy; analysts need to know whether the evidence aligns with known malicious patterns and whether the model is relying on meaningful signals.
+
 Second, explainability supports investigation efficiency. If an alert comes with evidence top contributing PE features, or highlighted email tokens analysts can validate or dismiss the prediction faster, which improves SOC throughput.
+
 Third, explainability helps reveal failure modes, including shortcut learning, spurious correlations, and inconsistent preprocessing. In security, these failure modes are not just academic; they can be exploited by attackers or can produce operational harm through excessive false positives.
-Because of this, explanations must be treated as outputs that require validation and careful interpretation. This is especially relevant for attention-based signals in transformers; prior work cautions that attention weights are not automatically faithful explanations of model reasoning, and explanation claims must be supported by evaluation rather than assumption~[7].
+
+Because of this, explanations must be treated as outputs that require validation and careful interpretation. This is especially relevant for attention-based signals in transformers; prior work cautions that attention weights are not automatically faithful explanations of model reasoning, and explanation claims must be supported by evaluation rather than assumption~\cite{JW2019}.
 
 \subsection{Research Aim and Scope}
 
-This research aims to develop and evaluate a unified, proposal-aligned XAI pipeline for two representative cybersecurity threat vectors:\\
-(1)~static malware detection from Windows PE artifacts and\\
-(2)~phishing email detection from natural-language email text.\\
+This research aims to develop and evaluate a unified, proposal-aligned XAI pipeline for two representative cybersecurity threat vectors:
+
+(1) static malware detection from Windows PE artifacts and
+
+(2) phishing email detection from natural-language email text.
+
 The project is designed so that each pipeline produces both
+
 (a) strong predictive performance and
+
 (b) analyst-oriented evidence describing the model’s reasoning.
-For malware, the work focuses on static detection using the EMBER2024 PE feature set[1] and a section-level structural representation derived from executables . For phishing, the work focuses on text-only email classification using BERT fine-tuning, trained on a Kaggle dataset of labeled phishing emails~[6, 8].
+
+For malware, the work focuses on static detection using the EMBER2024 PE feature set~\cite{JMGPR2024} and a section-level structural representation derived from executables . For phishing, the work focuses on text-only email classification using BERT fine-tuning, trained on a Kaggle dataset of labeled phishing emails~\cite{JMKK2019} \cite{phishingDT}.
+
 The thesis does not include dynamic malware execution traces, malware family attribution, network intrusion detection, URL crawling, attachment sandboxing, sender reputation systems, or production SOC deployment engineering.
 
 \subsection{Malware Detection Branch: Design and Motivation}
 
-The malware branch investigates explainable static malware detection using the EMBER2024 PE feature representation~[1]. Structurally, this representation maps each Portable Executable (PE) file into a fixed-dimensional vector of engineered features, summarizing byte-level statistics, header metadata, and import-related information.
+The malware branch investigates explainable static malware detection using the EMBER2024 PE feature representation~\cite{JMGPR2024}. Structurally, this representation maps each Portable Executable (PE) file into a fixed-dimensional vector of engineered features, summarizing byte-level statistics, header metadata, and import-related information.
+
 The dataset itself directly provides the first modality: a set of tabular descriptors that capture statistical properties of the file. However, tabular summaries can obscure section-level structural layout information. To address this, we introduce original descriptors as a second modality by rendering the executable’s section layout into a compact image and processing it with a Convolutional Neural Network (CNN). This allows the system to learn structural patterns that the pre-calculated dataset features may miss.
+
 This choice reflects a practical intuition: PE files carry both statistical feature evidence (captured by engineered vectors) and structural evidence (captured by section organization), and combining both may strengthen classification while enabling richer explanations.
+
 To evaluate this hypothesis, we train two models: a TabOnly baseline that learns only from the aligned tabular feature vector, and a Fusion Tab+CNN model that merges a feed-forward tabular encoder with a lightweight CNN encoder over section images. On the held-out test split, the Fusion Tab+CNN model consistently outperformed the TabOnly baseline across both standard and tuned thresholds. The comparative results are summarized in Table 1.
-Table 1. Performance comparison of TabOnly vs. Fusion Tab+CNN models.
-We emphasize the tuned operating point because threshold selection is an intrinsic part of operational decision-making, while still reporting the standard threshold for transparency and comparability.Explainability is integrated in a modality-aligned manner. For tabular evidence, we use Integrated Gradients to compute both global attributions (aggregated evidence trends) and local attributions for individual files~[4]. For the CNN branch, we use Grad-CAM[3] to generate heatmaps that highlight the section-image regions that most influence the malware decision. During development, we identify a critical reliability issue: when training-time feature normalization is missing during inference and explainability, predicted probabilities and explanations become inconsistent. By regenerating and enforcing the correct normalization statistics aligned to the enforced feature dimension, we restore probability fidelity and ensure attributions are computed on the same scale as training, which is necessary for meaningful comparison across cases.
+
+% ---------- Table 4.1 ----------
+\begin{table}[htbp]
+\centering
+\caption{Performance comparison of TabOnly vs. Fusion Tab+CNN models.}
+\label{tab:performance_comparison}
+\begin{tabular}{lccc} 
+\toprule
+\textbf{Model} & \textbf{Threshold ($\tau$)} & \textbf{Accuracy} & \textbf{Malware F1} \\ 
+\midrule
+TabOnly (Baseline) & 0.50 & 0.9123 & 0.9081 \\
+                   & 0.35 & 0.9170 & 0.9169 \\ 
+\midrule
+Fusion Tab+CNN     & 0.50 & 0.9406 & 0.9392 \\
+                   & \textbf{0.35} & \textbf{0.9420} & \textbf{0.9419} \\ 
+\bottomrule
+\end{tabular}
+\end{table}
+
+%Table 1. Performance comparison of TabOnly vs. Fusion Tab+CNN models.
+
+We emphasize the tuned operating point because threshold selection is an intrinsic part of operational decision-making, while still reporting the standard threshold for transparency and comparability.Explainability is integrated in a modality-aligned manner. For tabular evidence, we use Integrated Gradients to compute both global attributions (aggregated evidence trends) and local attributions for individual files~\cite{MAQ2017}. For the CNN branch, we use Grad-CAM~\cite{SCDVPB2017} to generate heatmaps that highlight the section-image regions that most influence the malware decision. During development, we identify a critical reliability issue: when training-time feature normalization is missing during inference and explainability, predicted probabilities and explanations become inconsistent. By regenerating and enforcing the correct normalization statistics aligned to the enforced feature dimension, we restore probability fidelity and ensure attributions are computed on the same scale as training, which is necessary for meaningful comparison across cases.
 
 \subsection{Phishing Email Detection Branch: Design and Motivation}
 
-The phishing branch addresses the problem of classifying malicious social-engineering emails using NLP while providing token-level evidence that supports analyst interpretation. Since phishing messages evolve rapidly and frequently avoid fixed keyword patterns, transformer-based models such as BERT[6] are well-suited because they learn contextual representations and can capture semantic cues across varied phrasing. In this project, we fine-tune bert-base-uncased on the Kaggle dataset “phishingemails,” which contains email text and binary labels (Safe vs Phishing)~[8].
+The phishing branch addresses the problem of classifying malicious social-engineering emails using NLP while providing token-level evidence that supports analyst interpretation. Since phishing messages evolve rapidly and frequently avoid fixed keyword patterns, transformer-based models such as BERT~\cite{JMKK2019} are well-suited because they learn contextual representations and can capture semantic cues across varied phrasing. In this project, we fine-tune bert-base-uncased on the Kaggle dataset “phishingemails,” which contains email text and binary labels (Safe vs Phishing)~\cite{phishingDT}.
+
 Before training, we perform dataset cleaning to reduce noise and improve robustness: removing missing entries, filtering extremely short emails, validating labels, and deduplicating repeated rows. After cleaning, the dataset size becomes 17,486 emails (Safe = 10,967; Phishing = 6,519). We then construct stratified train/validation/test splits to preserve class proportions. Emails are tokenized with a maximum sequence length of 384 tokens. The resulting classifier achieves strong test performance under the default threshold: accuracy $\approx$ 0.9926, precision $\approx$ 0.9953, recall $\approx$ 0.9847, and F1 $\approx$ 0.9900. We also evaluate threshold tuning on the validation set to study operational precision--recall trade-offs; although a tuned threshold improves validation performance, the final test performance remains comparable, indicating stable generalization.
-The phishing branch includes an explanation layer intended to produce evidence directly from email content. We generate token-level explanations using SHAP PartitionExplainer[5], highlighting words that increase or decrease phishing probability. In parallel, we extract attention-based token signals from the same model as a second explanation stream, while treating attention carefully because it should not automatically be interpreted as a faithful explanation without evaluation~[7]. To align with the project requirement of explanation assessment, we evaluate explanation quality using faithfulness (deletion/insertion-style behavior) and stability (top-k token consistency under perturbations). This comparison reveals a meaningful trade-off: attention-based explanations tend to be more stable, while SHAP provides explicit positive/negative contribution information but may vary more under small perturbations.
+
+The phishing branch includes an explanation layer intended to produce evidence directly from email content. We generate token-level explanations using SHAP PartitionExplainer~\cite{LL2017}, highlighting words that increase or decrease phishing probability. In parallel, we extract attention-based token signals from the same model as a second explanation stream, while treating attention carefully because it should not automatically be interpreted as a faithful explanation without evaluation~\cite{JW2019}. To align with the project requirement of explanation assessment, we evaluate explanation quality using faithfulness (deletion/insertion-style behavior) and stability (top-k token consistency under perturbations). This comparison reveals a meaningful trade-off: attention-based explanations tend to be more stable, while SHAP provides explicit positive/negative contribution information but may vary more under small perturbations.
+
 A practical limitation observed in this branch is long-email handling. Token-length analysis shows that a substantial portion of emails exceed 384 tokens, and some exceed BERT’s 512-token architectural limit. This behavior explains warnings encountered during explanation generation and motivates long-text handling strategies as future work (e.g., chunking or long-context transformers), while remaining consistent with the scope of this Research implementation.
 
 \subsection{Contributions}
 
 Within the implemented scope of this MP-4 research, the main contributions are:
-An explainable multimodal static malware detection pipeline using EMBER2024 PE features, including a TabOnly baseline and a Tab+CNN fusion model evaluated under both standard and tuned thresholds~[1].
-An explainable phishing email detection pipeline using fine-tuned BERT on a cleaned Kaggle dataset[6, 8], supported by strong held-out performance and operational threshold analysis.
-A unified explanation strategy across modalities, combining Integrated Gradients and Grad-CAM for malware and SHAP plus attention-based evidence for phishing~[3--5, 7].
-Reliability-focused implementation findings and quality evaluation: normalization consistency for malware explanations and faithfulness/stability analysis for phishing explanations~[4, 5, 7].
+
+An explainable multimodal static malware detection pipeline using EMBER2024 PE features, including a TabOnly baseline and a Tab+CNN fusion model evaluated under both standard and tuned thresholds~\cite{JMGPR2024}.
+
+An explainable phishing email detection pipeline using fine-tuned BERT on a cleaned Kaggle dataset~\cite{JMKK2019} \cite{phishingDT}, supported by strong held-out performance and operational threshold analysis.
+
+A unified explanation strategy across modalities, combining Integrated Gradients and Grad-CAM for malware and SHAP plus attention-based evidence for phishing~\cite{SCDVPB2017} \cite{MAQ2017} \cite{LL2017} \cite{JW2019}.
+
+Reliability-focused implementation findings and quality evaluation: normalization consistency for malware explanations and faithfulness/stability analysis for phishing explanations~\cite{MAQ2017} \cite{LL2017} \cite{JW2019}.
 
 \subsection{Organization of the Report}
 
 The remainder of this report is organized as follows.
-Chapter 2 reviews background and related work strictly within the project scope, covering PE-based malware detection, transformer-based phishing detection, and the explainability methods adopted in this work~[1, 3--7].
-Chapter 3 presents the methodology, including dataset preparation, preprocessing and normalization, model architectures, training configuration, evaluation protocol, and explanation generation settings. Chapter
-4 reports experimental results for both branches, including threshold comparisons and classification metrics.
-Chapter 5 analyzes explainability outputs and explanation quality measures, interprets representative cases, and discusses limitations such as preprocessing alignment and long-email truncation.
-Chapter 6 concludes the thesis and outlines future work directions.
 
+Chapter 2 reviews background and related work strictly within the project scope, covering PE-based malware detection, transformer-based phishing detection, and the explainability methods adopted in this work~\cite{JMGPR2024} \cite{SCDVPB2017} \cite{MAQ2017} \cite{LL2017} \cite{JMKK2019} \cite{JW2019}.
+
+Chapter 3 presents the methodology, including dataset preparation, preprocessing and normalization, model architectures, training configuration, evaluation protocol, and explanation generation settings. Chapter
+
+4 reports experimental results for both branches, including threshold comparisons and classification metrics.
+
+Chapter 5 analyzes explainability outputs and explanation quality measures, interprets representative cases, and discusses limitations such as preprocessing alignment and long-email truncation.
+
+Chapter 6 concludes the thesis and outlines future work directions.
 
 \section{Literature Review}
 
-Static malware and phishing detection sit at the front line~[28] of Security Operations Center (SOC) triage because they can be executed quickly, safely, and at scale often before any deeper investigation is feasible~[29]. For Windows endpoints, a large share of malicious delivery still arrives as Portable Executable (PE) files~[30] distributed through downloads~[31], email attachments, and staged droppers~[32]. Similarly, phishing emails remain a persistent entry point~[25] because attackers can cheaply vary wording, impersonate trusted entities, and exploit human decision-making under time pressure~[33]. Across both domains, the operational constraint is the same: defenders must filter a high-volume stream with limited analyst time, and the cost of errors is real (missed malware or missed phishing can lead to compromise; excessive false positives can disrupt business operations and overwhelm analysts).
-This operational setting is exactly where the “trust gap” of modern machine learning (ML) becomes visible. Deep models can achieve strong predictive metrics, but SOC decisions often require justification~[34]: why a file was quarantined, why an email was blocked, and what evidence supports that action. Explainable AI (XAI) addresses this gap by producing human-interpretable signals (feature attributions, token contributions, or saliency maps) that connect a model’s output to evidence in the input. In cybersecurity, this evidence is not merely explanatory-it supports analyst validation, accelerates investigation, and reduces the risk of deploying opaque automation in high-stakes workflows. For this reason, our research treats explainability as a first-class system output and we evaluate XAI behavior as part of the overall detection pipeline~[3, 5].
+Static malware and phishing detection sit at the front line~\cite{KBSSSK2025} of Security Operations Center (SOC) triage because they can be executed quickly, safely, and at scale often before any deeper investigation is feasible~\cite{GPH2024}. For Windows endpoints, a large share of malicious delivery still arrives as Portable Executable (PE) files~\cite{opentext2025} distributed through downloads~\cite{recordedfuture2025malware}, email attachments, and staged droppers~\cite{secureframe2025phishing}. Similarly, phishing emails remain a persistent entry point~\cite{DBIR2025} because attackers can cheaply vary wording, impersonate trusted entities, and exploit human decision-making under time pressure~\cite{CGQ2025}. Across both domains, the operational constraint is the same: defenders must filter a high-volume stream with limited analyst time, and the cost of errors is real (missed malware or missed phishing can lead to compromise; excessive false positives can disrupt business operations and overwhelm analysts).
+
+This operational setting is exactly where the “trust gap” of modern machine learning (ML) becomes visible. Deep models can achieve strong predictive metrics, but SOC decisions often require justification~\cite{NSDSP2025}: why a file was quarantined, why an email was blocked, and what evidence supports that action. Explainable AI (XAI) addresses this gap by producing human-interpretable signals (feature attributions, token contributions, or saliency maps) that connect a model’s output to evidence in the input. In cybersecurity, this evidence is not merely explanatory-it supports analyst validation, accelerates investigation, and reduces the risk of deploying opaque automation in high-stakes workflows. For this reason, our research treats explainability as a first-class system output and we evaluate XAI behavior as part of the overall detection pipeline~\cite{SCDVPB2017} \cite{LL2017}.
 
 \subsection{Malware Detection}
 
 \subsubsection{Feature-engineered PE malware detection and the EMBER line of work}
 
-A major practical tradition~[9] in static malware detection is to extract specific, pre-defined properties from the Portable Executable (PE) file to create a fixed-length input vector. In the literature, these inputs are variously referred to as “handcrafted features”~[14, 35], “engineered features”~[9], or “tabular descriptors”~[1]. To maintain consistency and precision, this thesis refers to them as engineered features.
-These features typically include~[28] byte-level statistics (e.g., histograms), entropy-related measures that can correlate with packing/obfuscation, metadata derived from headers/sections, and import/export information that reflects program behavior at a coarse structural level. The key strength of this approach is operational scalability: feature extraction and inference are fast~[35], and fixed-dimensional vectors support repeatable benchmarking~[1], thresholding, and controlled ablation studies~[36].
-The EMBER~[9] dataset played a foundational role in making large-scale, reproducible PE-feature research possible by providing standardized feature extraction and evaluation conventions. EMBER2024~[1] extends this tradition by providing a large-scale, pre-computed dataset where each file is represented not as raw bytes, but as a vector of engineered values summarizing specific file characteristics. These features explicitly include:
+A major practical tradition~\cite{HP20182018} in static malware detection is to extract specific, pre-defined properties from the Portable Executable (PE) file to create a fixed-length input vector. In the literature, these inputs are variously referred to as “handcrafted features”~\cite{MT2025} \cite{EDS2020}, “engineered features”~\cite{HP20182018}, or “tabular descriptors”~\cite{JMGPR2024}. To maintain consistency and precision, this thesis refers to them as engineered features.
+
+These features typically include~\cite{KBSSSK2025} byte-level statistics (e.g., histograms), entropy-related measures that can correlate with packing/obfuscation, metadata derived from headers/sections, and import/export information that reflects program behavior at a coarse structural level. The key strength of this approach is operational scalability: feature extraction and inference are fast~\cite{EDS2020}, and fixed-dimensional vectors support repeatable benchmarking~\cite{JMGPR2024}, thresholding, and controlled ablation studies~\cite{AQPWPWCR2022}.
+
+The EMBER~\cite{HP20182018} dataset played a foundational role in making large-scale, reproducible PE-feature research possible by providing standardized feature extraction and evaluation conventions. EMBER2024~\cite{JMGPR2024} extends this tradition by providing a large-scale, pre-computed dataset where each file is represented not as raw bytes, but as a vector of engineered values summarizing specific file characteristics. These features explicitly include:
+
 Byte-level statistics: Histograms and entropy calculations that capture the distribution of raw byte values.
+
 Header information: Metadata extracted from the COFF and Optional headers (e.g., linker versions, timestamps, and machine types).
+
 Section characteristics: Statistics regarding the size, entropy, and virtual memory layout of the executable’s sections.
+
 Import and Export information: Hashed representations of imported libraries, imported functions, and exported symbols, which serve as proxies for the program’s capabilities.
-By relying on these pre-calculated engineered features, the EMBER2024 representation enables scalable training and systematic evaluation at the feature level~[1, 9].
-Benchmark baselines and published results. To support reproducible comparison, the EMBER2024 authors also provide official benchmark models and runnable training/evaluation scripts in the public repository (see the examples/ directory)~[1, 37]. These baselines are primarily LightGBM classifiers trained on EMBER feature version 3 vectors, intended to serve as reference performance levels for future work. For malicious/benign detection, the benchmark LightGBM classifier achieves ROC AUC = 0.9949 and reaches a true positive rate of 94.48\% at a 1\% false positive rate on the EMBER2024 test set~[1]. For malware family classification, the benchmark LightGBM model reports accuracy = 67.97\%, with weighted-F1 = 0.6664 and macro-F1 = 0.4371, reflecting the long-tail difficulty across many smaller families~[1]. These published baseline results provide a consistent reference point that later experimental results (including ours) should be compared against.
+
+By relying on these pre-calculated engineered features, the EMBER2024 representation enables scalable training and systematic evaluation at the feature level~\cite{JMGPR2024} \cite{HP20182018}.
+
+Benchmark baselines and published results. To support reproducible comparison, the EMBER2024 authors also provide official benchmark models and runnable training/evaluation scripts in the public repository (see the examples/ directory)~\cite{JMGPR2024} \cite{ember2024github}. These baselines are primarily LightGBM classifiers trained on EMBER feature version 3 vectors, intended to serve as reference performance levels for future work. For malicious/benign detection, the benchmark LightGBM classifier achieves ROC AUC = 0.9949 and reaches a true positive rate of 94.48\% at a 1\% false positive rate on the EMBER2024 test set~\cite{JMGPR2024}. For malware family classification, the benchmark LightGBM model reports accuracy = 67.97\%, with weighted-F1 = 0.6664 and macro-F1 = 0.4371, reflecting the long-tail difficulty across many smaller families~\cite{JMGPR2024}. These published baseline results provide a consistent reference point that later experimental results (including ours) should be compared against.
 
 \subsubsection{Representation learning from raw bytes and the “end-to-end” alternative}
 
-In parallel to engineered-feature pipelines, a competing research direction~[10, 28] argues that end-to-end models operating directly on raw bytes can discover discriminative patterns without relying on explicit feature design. MalConv~[10] is a widely cited example of this idea~[14, 35], demonstrating that convolutional architectures can ingest long byte sequences to classify executables.
-This family of approaches has expanded the field’s understanding~[12, 28] of representation learning for malware, but it also highlights practical constraints that are important for SOC-facing systems: very long sequences increase compute and memory costs~[35], truncation or padding choices can affect what the model learns~[10, 36], and mapping byte-level signals to analyst-friendly evidence can be challenging compared to structured PE features~[34, 36].
-These trade-offs matter to our project design. We stay within a controlled, fixed-dimensional representation (tabular PE vectors, plus a compact “section image” representation) to keep the pipeline scalable and explanation outputs interpretable. In other words, rather than choosing between “feature engineering” and “end-to-end bytes,” our work aligns with literature~[1, 10] that treats representation choice as an operational design decision: maintain tractable inputs that can support stable training, controlled evaluation, and explanation artifacts that analysts can act on.
+In parallel to engineered-feature pipelines, a competing research direction~\cite{RBSBCN2017} \cite{KBSSSK2025} argues that end-to-end models operating directly on raw bytes can discover discriminative patterns without relying on explicit feature design. MalConv~\cite{RBSBCN2017} is a widely cited example of this idea~\cite{MT2025} ~\cite{EDS2020}, demonstrating that convolutional architectures can ingest long byte sequences to classify executables.
+
+This family of approaches has expanded the field’s understanding~\cite{RCEJH2025} ~\cite{KBSSSK2025} of representation learning for malware, but it also highlights practical constraints that are important for SOC-facing systems: very long sequences increase compute and memory costs~\cite{EDS2020}, truncation or padding choices can affect what the model learns~\cite{RBSBCN2017} ~\cite{AQPWPWCR2022}, and mapping byte-level signals to analyst-friendly evidence can be challenging compared to structured PE features~\cite{NSDSP2025} \cite{AQPWPWCR2022}.
+
+These trade-offs matter to our project design. We stay within a controlled, fixed-dimensional representation (tabular PE vectors, plus a compact “section image” representation) to keep the pipeline scalable and explanation outputs interpretable. In other words, rather than choosing between “feature engineering” and “end-to-end bytes,” our work aligns with literature~\cite{JMGPR2024} \cite{RBSBCN2017} that treats representation choice as an operational design decision: maintain tractable inputs that can support stable training, controlled evaluation, and explanation artifacts that analysts can act on.
 
 \subsubsection{Malware-as-image and structural visual encodings}
 
-Another influential branch~[11, 28] of malware research transforms executables into image-like representations to enable CNN-based modeling. Early work~[11] showed that visualizing binaries as images can support classification by capturing texture-like patterns that emerge from byte structure. More recent work~[13] continues to explore image conversion techniquesnsometimes combined with additional features---showing that visual encodings can complement other representations when designed carefully.
-The literature further establishes that image-based approaches offer distinct advantages for interpretability and fusion. Research indicates that unlike purely tabular data, visual representations enable spatial explanation methods (e.g., Grad-CAM) that can highlight exactly which regions of a file structure influence the model's decision~[3, 13]. Furthermore, studies in multimodal learning suggest that combining these structural visual signals with engineered feature vectors creates a more robust detection system, as the two modalities capture complementary patterns statistical evidence from features and spatial evidence from structure~[11, 13].
+Another influential branch~\cite{NKJMB2011} \cite{KBSSSK2025} of malware research transforms executables into image-like representations to enable CNN-based modeling. Early work~\cite{NKJMB2011} showed that visualizing binaries as images can support classification by capturing texture-like patterns that emerge from byte structure. More recent work~\cite{ZLSC2024} continues to explore image conversion techniquesnsometimes combined with additional features---showing that visual encodings can complement other representations when designed carefully.
+
+The literature further establishes that image-based approaches offer distinct advantages for interpretability and fusion. Research indicates that unlike purely tabular data, visual representations enable spatial explanation methods (e.g., Grad-CAM) that can highlight exactly which regions of a file structure influence the model's decision~\cite{SCDVPB2017} \cite{ZLSC2024}. Furthermore, studies in multimodal learning suggest that combining these structural visual signals with engineered feature vectors creates a more robust detection system, as the two modalities capture complementary patterns statistical evidence from features and spatial evidence from structure ~\cite{NKJMB2011} \cite{ZLSC2024}.
 
 \subsubsection{Multimodal and fusion modeling for static malware detection}
 
-The literature increasingly suggests~[13, 28] that no single static view fully captures malware behavior, especially under packing, obfuscation, and family diversity. As a result, fusion architectures that combine complementary signals have become more common. For example, research that jointly analyzes PE structure with entropy-related signals reflects the broader idea that combining structural and distributional properties can improve malware classification robustness~[2]. More generally, fusion is attractive because it provides redundancy: when one modality is less informative for a sample (e.g., a heavily packed file), another modality may still retain useful evidence.
-This trajectory in malware research supports the hypothesis that fusing structured PE vectors with compact structural visual representations can improve detection performance without abandoning interpretability~[2, 3]. By comparing tabular-only baselines against fusion architectures, recent studies aim to quantify exactly how much robustness is gained by integrating these complementary static views.
+The literature increasingly suggests~\cite{ZLSC2024} \cite{KBSSSK2025} that no single static view fully captures malware behavior, especially under packing, obfuscation, and family diversity. As a result, fusion architectures that combine complementary signals have become more common. For example, research that jointly analyzes PE structure with entropy-related signals reflects the broader idea that combining structural and distributional properties can improve malware classification robustness~\cite{SZS25}. More generally, fusion is attractive because it provides redundancy: when one modality is less informative for a sample (e.g., a heavily packed file), another modality may still retain useful evidence.
+
+This trajectory in malware research supports the hypothesis that fusing structured PE vectors with compact structural visual representations can improve detection performance without abandoning interpretability~\cite{SZS25} \cite{SCDVPB2017}. By comparing tabular-only baselines against fusion architectures, recent studies aim to quantify exactly how much robustness is gained by integrating these complementary static views.
 
 \subsubsection{Explainability for malware: attribution for tabular signals and localization for CNN signals}
 
-As deep learning becomes common in malware detection~[28], explainability has shifted from “optional” to “required” for analyst-facing systems~[34]. Two families of methods align naturally with multimodal designs:
-Attribution methods for tabular deep models. Integrated Gradients (IG) provides per-feature attributions for differentiable models and is widely used to interpret deep networks by measuring how input features contribute to predictions along a path from a baseline to the actual input~[4]. For malware PE vectors, IG produces ranked feature attributions that can be summarized into analyst-readable tables (global importance trends and local evidence for a single file).
-Localization methods for CNN components. Grad-CAM produces class-discriminative heatmaps for CNN-based models, highlighting which spatial regions in an image-like input most influenced the classification~[3]. For section-image encodings, Grad-CAM provides a direct visual “where the model looked” signal that can be inspected alongside the predicted probability.
-A critical point in XAI literature~[21, 34] especially relevant to security is that explanation outputs must be reliable, not merely visually appealing. Sanity-check research shows that some saliency/explanation methods can fail in subtle ways (e.g., remaining similar even when model parameters or labels are randomized), motivating validation procedures rather than assuming explanation faithfulness by default~[15]. This supports the methodological choice to treat explanation generation and validation as part of the system design, not a post-hoc screenshot~[3, 4, 15].
+As deep learning becomes common in malware detection~\cite{KBSSSK2025}, explainability has shifted from “optional” to “required” for analyst-facing systems~\cite{NSDSP2025}. Two families of methods align naturally with multimodal designs:
+
+Attribution methods for tabular deep models. Integrated Gradients (IG) provides per-feature attributions for differentiable models and is widely used to interpret deep networks by measuring how input features contribute to predictions along a path from a baseline to the actual input~\cite{MAQ2017}. For malware PE vectors, IG produces ranked feature attributions that can be summarized into analyst-readable tables (global importance trends and local evidence for a single file).
+
+Localization methods for CNN components. Grad-CAM produces class-discriminative heatmaps for CNN-based models, highlighting which spatial regions in an image-like input most influenced the classification~\cite{SCDVPB2017}. For section-image encodings, Grad-CAM provides a direct visual “where the model looked” signal that can be inspected alongside the predicted probability.
+
+A critical point in XAI literature~\cite{DJRLXSWB2020} \cite{NSDSP2025} especially relevant to security is that explanation outputs must be reliable, not merely visually appealing. Sanity-check research shows that some saliency/explanation methods can fail in subtle ways (e.g., remaining similar even when model parameters or labels are randomized), motivating validation procedures rather than assuming explanation faithfulness by default~\cite{JJMIMB2018}. This supports the methodological choice to treat explanation generation and validation as part of the system design, not a post-hoc screenshot~\cite{SCDVPB2017} \cite{MAQ2017} \cite{JJMIMB2018}.
 
 \subsection{Phishing Email Detection}
 
 \subsubsection{From heuristic filters to ML/NLP-based phishing detection}
 
-Phishing detection started historically~[16] with heuristics and surface indicators (keyword rules, suspicious URL patterns, unusual sender domains, and handcrafted email features). Classic ML work showed that phishing emails can be learned as a classification task using engineered features and supervised learning, formalizing the detection problem with measurable false-positive/false-negative trade-offs~[16]. While these approaches remain useful baselines, attackers can easily evade brittle rules by paraphrasing, changing formatting, and mimicking legitimate writing styles, pushing research toward models that capture meaning in context rather than relying on a fixed keyword list.
-This shift motivates the modern NLP framing of phishing: phishing is not only “contains suspicious terms,” but “uses language to trigger action,” often through urgency cues, authority impersonation, or socially engineered request patterns. Therefore, more contextual language models are better aligned with how phishing is expressed in real text~[6, 16].
+Phishing detection started historically~\cite{INA2007} with heuristics and surface indicators (keyword rules, suspicious URL patterns, unusual sender domains, and handcrafted email features). Classic ML work showed that phishing emails can be learned as a classification task using engineered features and supervised learning, formalizing the detection problem with measurable false-positive/false-negative trade-offs~\cite{INA2007}. While these approaches remain useful baselines, attackers can easily evade brittle rules by paraphrasing, changing formatting, and mimicking legitimate writing styles, pushing research toward models that capture meaning in context rather than relying on a fixed keyword list.
+
+This shift motivates the modern NLP framing of phishing: phishing is not only “contains suspicious terms,” but “uses language to trigger action,” often through urgency cues, authority impersonation, or socially engineered request patterns. Therefore, more contextual language models are better aligned with how phishing is expressed in real text~\cite{JMKK2019} \cite{INA2007}.
 
 \subsubsection{Transformer-based phishing email detection and BERT fine-tuning}
 
-Transformers advanced text classification by modeling contextual relationships between tokens via attention, enabling stronger representations than bag-of-words or shallow sequence models in many domains. BERT, in particular, introduced a pretraining-and-fine-tuning paradigm that makes strong language understanding available even with moderate task-specific datasets~[6]. In phishing email detection, multiple studies have reported that BERT-family fine-tuning can produce high accuracy because the model can learn semantic patterns of persuasion and deception that are not reducible to simple keywords.
-Recent phishing-email-specific research illustrates this direction clearly. For example, work on BERT-based phishing detection explores fine-tuning variants (e.g., DistilBERT, TinyBERT, or standard BERT) and reports strong empirical performance in email phishing classification settings~[17]. Other recent work explores deep learning enhancements and optimization strategies for phishing email detection, reinforcing that dataset quality, preprocessing, and training design can strongly influence measured performance~[19]. These studies collectively motivate the fine-tuning of BERT-base classifiers on cleaned email corpora and the reporting of standard classification metrics under both default and tuned decision thresholds~[6, 8, 17].
+Transformers advanced text classification by modeling contextual relationships between tokens via attention, enabling stronger representations than bag-of-words or shallow sequence models in many domains. BERT, in particular, introduced a pretraining-and-fine-tuning paradigm that makes strong language understanding available even with moderate task-specific datasets~\cite{JMKK2019}. In phishing email detection, multiple studies have reported that BERT-family fine-tuning can produce high accuracy because the model can learn semantic patterns of persuasion and deception that are not reducible to simple keywords.
+
+Recent phishing-email-specific research illustrates this direction clearly. For example, work on BERT-based phishing detection explores fine-tuning variants (e.g., DistilBERT, TinyBERT, or standard BERT) and reports strong empirical performance in email phishing classification settings~\cite{SKZM2023}. Other recent work explores deep learning enhancements and optimization strategies for phishing email detection, reinforcing that dataset quality, preprocessing, and training design can strongly influence measured performance~\cite{MURSFPTJ2025}. These studies collectively motivate the fine-tuning of BERT-base classifiers on cleaned email corpora and the reporting of standard classification metrics under both default and tuned decision thresholds~\cite{JMKK2019} \cite{phishingDT} \cite{SKZM2023}.
 
 \subsubsection{Explainable phishing detection: token-level evidence as an analyst-facing requirement}
 
 In SOC workflows, phishing alerts are most actionable when the system can highlight what text evidence drove the decision. In practice, “phishing” labels without evidence are difficult to trust, hard to document in incident reports, and costly when false positives disrupt legitimate business communication. This operational reality motivates explainable phishing detection research, where explanations are produced at the token/phrase level so that analysts can quickly validate the alert.
+
 Two explanation paradigms are most relevant to our project:
-Post-hoc token attribution. SHAP estimates feature contributions using Shapley-value principles and can be applied to text by treating tokens (or token groups) as explainable features, producing positive/negative contribution signals that are easy to communicate in analyst-facing summaries~[5].
-Attention-based highlighting. Because transformers compute attention internally, many systems present attention weights as a proxy for “what the model focused on.” However, the literature warns that attention weights are not automatically faithful explanations of model reasoning; they may be weakly correlated with true decision influence, and alternative attention distributions can yield similar outputs~[7]. A response line of work argues that whether attention is useful depends on definitions and evaluation design, proposing more careful diagnostic perspectives rather than blanket acceptance or rejection~[20].
-Our MP-4 phishing branch directly follows this literature stance: we present attention tokens as a second explanation stream, but we do not treat them as inherently faithful. Instead, we compare them to SHAP-based token contributions and evaluate explanation behavior rather than relying on visual plausibility alone~[5, 7, 20].
+
+Post-hoc token attribution. SHAP estimates feature contributions using Shapley-value principles and can be applied to text by treating tokens (or token groups) as explainable features, producing positive/negative contribution signals that are easy to communicate in analyst-facing summaries~\cite{LL2017}.
+
+Attention-based highlighting. Because transformers compute attention internally, many systems present attention weights as a proxy for “what the model focused on.” However, the literature warns that attention weights are not automatically faithful explanations of model reasoning; they may be weakly correlated with true decision influence, and alternative attention distributions can yield similar outputs~\cite{JW2019}. A response line of work argues that whether attention is useful depends on definitions and evaluation design, proposing more careful diagnostic perspectives rather than blanket acceptance or rejection~\cite{SY2019}.
+
+Our MP-4 phishing branch directly follows this literature stance: we present attention tokens as a second explanation stream, but we do not treat them as inherently faithful. Instead, we compare them to SHAP-based token contributions and evaluate explanation behavior rather than relying on visual plausibility alone~\cite{LL2017} \cite{JW2019} \cite{SY2019}.
 
 \subsubsection{Evaluating explanation quality: faithfulness and stability}
 
 Modern XAI research emphasizes that “good explanations” require evaluation criteria. Two properties are especially important for phishing email workflows:
+
 Faithfulness asks whether the explanation reflects what truly drives the model output. A common family of tests measures how predictions change when top-ranked evidence tokens are removed (deletion) or emphasized/added (insertion). If removing highlighted tokens barely changes the output, the explanation may not reflect the model’s actual reasoning.
+
 Stability asks whether explanations remain consistent under small perturbations (minor edits, rephrasing, or tokenization changes). In SOC settings, unstable explanations reduce trust because they appear arbitrary, even if accuracy is high.
-Benchmarks for interpretable NLP, such as ERASER, reinforce the importance of evaluating rationales/explanations with clearer standards rather than treating interpretability as a purely qualitative claim~[21]. This supports our project choice to compute faithfulness-style and stability-style metrics when comparing SHAP and attention-based explanations, aligning our evaluation with the broader expectation that explanations should be assessed, not assumed~[7, 21].
+
+Benchmarks for interpretable NLP, such as ERASER, reinforce the importance of evaluating rationales/explanations with clearer standards rather than treating interpretability as a purely qualitative claim~\cite{DJRLXSWB2020}. This supports our project choice to compute faithfulness-style and stability-style metrics when comparing SHAP and attention-based explanations, aligning our evaluation with the broader expectation that explanations should be assessed, not assumed~\cite{JW2019} \cite{DJRLXSWB2020}.
 
 \subsubsection{Long-email constraints and long-context transformer literature}
 
-A practical constraint for BERT-family models is maximum sequence length (commonly 512 WordPiece tokens). In email security, long messages are common (threads, newsletters, policy notices), and truncation can remove critical phishing evidence if it appears late in the email. Long-context transformer research addresses this by designing sparse-attention mechanisms that scale to longer sequences, enabling models to ingest more of the document without quadratic attention costs. BigBird is one representative approach that enables longer-context processing through sparse attention patterns~[22], and related long-document transformer work similarly targets the long-sequence limitation~[23].
-In our project, we remain within a standard BERT pipeline and explicitly document long-email behavior as a limitation; the long-context literature therefore functions as a grounded future direction rather than a claim of implementation. This keeps our report aligned with what we actually ran while still situating our observed limitation within established NLP research trends~[6, 22].
+A practical constraint for BERT-family models is maximum sequence length (commonly 512 WordPiece tokens). In email security, long messages are common (threads, newsletters, policy notices), and truncation can remove critical phishing evidence if it appears late in the email. Long-context transformer research addresses this by designing sparse-attention mechanisms that scale to longer sequences, enabling models to ingest more of the document without quadratic attention costs. BigBird is one representative approach that enables longer-context processing through sparse attention patterns~\cite{ZGDAA2020}, and related long-document transformer work similarly targets the long-sequence limitation~\cite{IMA2020}.
+
+In our project, we remain within a standard BERT pipeline and explicitly document long-email behavior as a limitation; the long-context literature therefore functions as a grounded future direction rather than a claim of implementation. This keeps our report aligned with what we actually ran while still situating our observed limitation within established NLP research trends~\cite{JMKK2019} \cite{ZGDAA2020}.
 
 \subsection{Summary and Positioning}
 
-Across malware and phishing, the literature shows a consistent trajectory: high-performing models increasingly rely on deep learning and richer representations, but operational adoption in cybersecurity requires transparent evidence and explanation reliability. For malware, EMBER-style PE feature benchmarks and multimodal fusion trends motivate our TabOnly baseline and Tab+CNN fusion design, while Grad-CAM and IG provide explanation modalities aligned to each input stream~[1--4, 9, 11]. For phishing, classical ML foundations motivate the detection framing, transformers motivate our BERT fine-tuning approach, and XAI debates motivate our decision to compare SHAP and attention while explicitly evaluating explanation quality~[5--8, 16, 20, 21].
-This chapter therefore establishes the research foundation for our implementation choices: controlled, scalable representations; fusion for complementary evidence; and explanations treated as measurable outputs that support analyst-oriented interpretation rather than black-box automation~[1--5, 7, 15].
+Across malware and phishing, the literature shows a consistent trajectory: high-performing models increasingly rely on deep learning and richer representations, but operational adoption in cybersecurity requires transparent evidence and explanation reliability. For malware, EMBER-style PE feature benchmarks and multimodal fusion trends motivate our TabOnly baseline and Tab+CNN fusion design, while Grad-CAM and IG provide explanation modalities aligned to each input stream~\cite{JMGPR2024}\cite{SZS25}\cite{SCDVPB2017}\cite{MAQ2017}\cite{HP20182018}\cite{NKJMB2011} . For phishing, classical ML foundations motivate the detection framing, transformers motivate our BERT fine-tuning approach, and XAI debates motivate our decision to compare SHAP and attention while explicitly evaluating explanation quality~\cite{LL2017}\cite{JMKK2019}\cite{JW2019}\cite{phishingDT}\cite{INA2007}\cite{SY2019}\cite{DJRLXSWB2020}.
 
+This chapter therefore establishes the research foundation for our implementation choices: controlled, scalable representations; fusion for complementary evidence; and explanations treated as measurable outputs that support analyst-oriented interpretation rather than black-box automation~\cite{JMGPR2024}\cite{SZS25}\cite{SCDVPB2017}\cite{MAQ2017}\cite{LL2017}\cite{JW2019}\cite{JJMIMB2018}
 
 \section{Methodology}
 
 This MP-4 research proposes and evaluates a unified Explainable AI (XAI) framework for two high-impact cybersecurity detection problems: static malware detection from Portable Executable (PE) artifacts and phishing email detection from natural-language email content. The methodological design reflects common Security Operations Center (SOC) requirements where automated detection must operate under high volume and time constraints, while still producing evidence that supports analyst validation and reporting. In this context, the project treats explainability as a core system output rather than a post-hoc visualization, because security decisions often require justification and traceability.
+
 The methodology follows a two-branch structure. In the malware branch, the design emphasizes scalability and multimodal evidence, using large-scale PE feature vectors and section-derived structural representations to study whether complementary static views improve robustness. In the phishing branch, the design emphasizes context-aware language modeling and token-level interpretability, using transformer fine-tuning for classification and explanation methods that highlight textual evidence behind phishing predictions. Across both branches, the evaluation is conducted under consistent protocols and includes probability threshold analysis to reflect deployment-style trade-offs in security settings.
 
 \subsection{Malware Detection}
 
 \subsubsection{Data Source and Dataset Representation}
 
-The malware branch is implemented as a static detection problem using an EMBER2024-derived PE feature representation~[1], grounded in the broader EMBER benchmark tradition of large-scale, reproducible PE malware research~[9]. Each executable is represented as a fixed-dimensional feature vector extracted from intrinsic properties of the PE artifact, and each sample is assigned a binary label indicating benign or malicious class membership. This representation is suitable for security triage because it supports efficient batch inference and allows structured explanation outputs at the feature level.
+The malware branch is implemented as a static detection problem using an EMBER2024-derived PE feature representation~\cite{JMGPR2024}, grounded in the broader EMBER benchmark tradition of large-scale, reproducible PE malware research~\cite{HP20182018}. Each executable is represented as a fixed-dimensional feature vector extracted from intrinsic properties of the PE artifact, and each sample is assigned a binary label indicating benign or malicious class membership. This representation is suitable for security triage because it supports efficient batch inference and allows structured explanation outputs at the feature level.
+
 To support large-scale processing, the dataset is organized in a sharded format where each shard stores a feature matrix and corresponding labels. Formally, each shard contains a feature matrix and a label vector , enabling streaming-style loading and memory-safe inference. This structure is important because the dataset scale requires repeated passes for training, validation, testing, and explainability generation without relying on full in-memory loading.
+
 A key implementation detail in this project is strict control of the effective feature dimension used by trained models and explainability routines. While the raw metadata indicates a slightly larger nominal feature dimension, the final training and evaluation enforce a consistent dimension of 515 features to ensure checkpoint compatibility and explanation comparability. This alignment step is necessary because neural network layers are parameterized for a specific input dimensionality, and even a single-feature mismatch prevents strict model reuse and can lead to inconsistent explanations.
 
 \subsubsection{Preprocessing and Normalization}
 
 Feature scaling is treated as a first-order methodological requirement because deep models trained on heterogeneous feature groups can become unstable or misleading if preprocessing differs between training, inference, and XAI computation. In this project, feature normalization statistics are computed on the training split and reused consistently in all later steps.
+
 Let and denote the per-feature mean and standard deviation estimated from training data. For each enforced input vector , the normalized vector is computed as:
+
 where is a small constant to prevent division-by-zero. This project explicitly enforces preprocessing consistency because explanation reliability depends on the model operating in the same numerical feature space that it was trained on. Inconsistent normalization can change predicted probabilities and distort gradient-based explanations, which undermines the central objective of producing analyst-usable evidence.
 
 \subsubsection{Model Architectures}
 
 To evaluate the benefit of multimodal evidence while retaining interpretability, the project implements two complementary architectures: a tabular baseline and a multimodal fusion model. Both operate on the same normalized tabular features, and the fusion model additionally incorporates a compact structural representation processed by a CNN.
+
 Tabular-only neural classifier (TabOnly)
+
 The baseline model is a deep tabular classifier that maps normalized PE feature vectors to class logits. Let denote the network with parameters , and let be the output logits for the benign and malware classes. The malware probability is computed using the softmax mapping:
+
 This baseline quantifies how much discriminative power is available from tabular PE features alone under the project’s normalization and evaluation protocol.
+
 Multimodal fusion classifier (Tab+CNN)
+
 The fusion model integrates two encoders: a tabular encoder over PE features and a CNN encoder over section-derived structural representations. For each sample, the model processes the pair , where is the normalized tabular vector and is the corresponding section-derived representation. The tabular branch produces an embedding , and the CNN branch produces an embedding . These embeddings are fused (via concatenation) and passed through a decision head to produce logits and probabilities.
-This design is consistent with the broader motivation for combining complementary static views: PE features capture global structural/statistical signals, while the CNN branch can capture localized structural patterns present in the section-derived representation. Importantly for this research, the architecture is also designed to support modality-aligned explanations: feature attributions for the tabular branch and spatial saliency for the CNN branch~[3, 4].
+
+This design is consistent with the broader motivation for combining complementary static views: PE features capture global structural/statistical signals, while the CNN branch can capture localized structural patterns present in the section-derived representation. Importantly for this research, the architecture is also designed to support modality-aligned explanations: feature attributions for the tabular branch and spatial saliency for the CNN branch~\cite{SCDVPB2017}\cite{MAQ2017}.
 
 \subsubsection{Evaluation Protocol and Operational Thresholding}
 
 Evaluation is performed on a held-out test split that contains 960,000 samples in the finalized experiment configuration. For each test sample , the model outputs a malware probability . A decision threshold converts probability into a binary prediction:
+
 The project reports performance under the conventional operating point and additionally performs a threshold sweep to select an operating threshold optimized for the malicious class F1 score. This selection is formalized as:
+
 The purpose of this step is not to “inflate” metrics but to reflect how SOC deployments often require tuned decision boundaries depending on tolerance for false positives versus missed detections. The methodology therefore preserves transparency by reporting both the default threshold and the best-F1 threshold.
 
 \subsubsection{Explainability Methods (Malware Branch)}
 
-The malware branch integrates explainability as an explicit pipeline stage so that each prediction can be accompanied by interpretable evidence. The approach uses Integrated Gradients for tabular attribution and Grad-CAM for CNN-based spatial localization, which are widely used explanation methods aligned to differentiable networks and convolutional representations~[3, 4].
+The malware branch integrates explainability as an explicit pipeline stage so that each prediction can be accompanied by interpretable evidence. The approach uses Integrated Gradients for tabular attribution and Grad-CAM for CNN-based spatial localization, which are widely used explanation methods aligned to differentiable networks and convolutional representations~\cite{SCDVPB2017} \cite{MAQ2017}.
+
 Integrated Gradients for tabular feature attribution
-Integrated Gradients (IG) attributes a model score to individual input features by integrating gradients along a path from a baseline to the input~[4]. For feature , the IG attribution is:
+
+Integrated Gradients (IG) attributes a model score to individual input features by integrating gradients along a path from a baseline to the input~\cite{MAQ2017}. For feature , the IG attribution is:
+
 In this project, IG is operationalized in two modes. First, global explanations are obtained by aggregating mean absolute attributions across a background subset of samples, producing a stable summary of which PE features consistently influence predictions. Second, local explanations are produced for selected test samples, yielding ranked feature evidence suitable for analyst-style review.
+
 Grad-CAM for CNN branch localization
-Grad-CAM produces a class-discriminative heatmap over a convolutional representation by weighting activation maps using the gradients of the target score~[3]. Given feature maps , Grad-CAM computes weights and forms a heatmap:
+
+Grad-CAM produces a class-discriminative heatmap over a convolutional representation by weighting activation maps using the gradients of the target score~\cite{SCDVPB2017}. Given feature maps , Grad-CAM computes weights and forms a heatmap:
+
 The resulting saliency map highlights which spatial regions in the section-derived representation contribute most strongly to the malware decision. In the fusion setting, Grad-CAM complements IG by providing structural evidence tied to the CNN pathway.
 
 \subsubsection{Implementation and Reproducibility Workflow}
 
 To ensure the experiments are repeatable and auditable, the malware pipeline follows a structured execution workflow. First, the dataset is loaded in a sharded manner to support large-scale iteration without exhausting memory, and feature dimensionality is strictly aligned to the trained model configuration. Second, training-derived normalization statistics are computed once and reused consistently for all downstream stages, including test evaluation and gradient-based explanations. Third, the trained model states are saved at convergence and reused for evaluation and explainability generation, ensuring that reported metrics and explanations are derived from the same model parameters. Finally, the pipeline produces traceable outputs that link each evaluated sample (or chosen analysis subset) to its predicted probability and explanation artifacts, enabling verification and report assembly without requiring ad-hoc recomputation.
+
 This workflow is especially important in XAI settings because explanation methods can be sensitive to model state, preprocessing, and numerical scale. By keeping the preprocessing statistics and inference configuration consistent across evaluation and explanation stages, the project preserves fidelity between model behavior and explanation outputs.
 
 \subsection{Phishing Email Detection}
 
 \subsubsection{Dataset Source and Preparation}
 
-The phishing branch uses a Kaggle-hosted phishing email dataset containing email text and binary labels (Safe vs Phishing)~[8]. The dataset is treated as a fixed snapshot and processed locally to prevent drift between runs. The project emphasizes transparent data preparation because phishing performance can be strongly influenced by noise, duplicates, and dataset artifacts.
+The phishing branch uses a Kaggle-hosted phishing email dataset containing email text and binary labels (Safe vs Phishing)~\cite{phishingDT}. The dataset is treated as a fixed snapshot and processed locally to prevent drift between runs. The project emphasizes transparent data preparation because phishing performance can be strongly influenced by noise, duplicates, and dataset artifacts.
+
 The preprocessing applies a clear and reproducible cleaning policy. Missing entries are removed, extremely short texts are filtered out, labels are validated, and duplicates are removed. After cleaning, the dataset contains 17,486 emails with class counts Safe = 10,967 and Phishing = 6,519. The dataset is then split into training, validation, and test partitions using stratification to preserve class proportions across splits, which is necessary because phishing is the minority class and unstable ratios can distort evaluation outcomes.
 
 \subsubsection{Tokenization and Long-Email Constraint}
 
-The phishing classifier is built using a transformer model, which requires tokenization into subword units. The project uses the uncased BERT tokenizer consistent with the pretraining configuration of the base model~[6]. Each email is converted into token identifiers and an attention mask, then padded and truncated to a fixed maximum length. In this project, the maximum token length is set to 384, and the pipeline explicitly measures the token-length distribution to quantify truncation as a methodological limitation. Because a substantial portion of emails exceed typical transformer limits, truncation can remove late-occurring phishing cues (e.g., action requests or embedded links), affecting both detection and explanation completeness. For this reason, long-email prevalence is treated as a documented constraint rather than an implementation detail.
+The phishing classifier is built using a transformer model, which requires tokenization into subword units. The project uses the uncased BERT tokenizer consistent with the pretraining configuration of the base model~\cite{JMKK2019}. Each email is converted into token identifiers and an attention mask, then padded and truncated to a fixed maximum length. In this project, the maximum token length is set to 384, and the pipeline explicitly measures the token-length distribution to quantify truncation as a methodological limitation. Because a substantial portion of emails exceed typical transformer limits, truncation can remove late-occurring phishing cues (e.g., action requests or embedded links), affecting both detection and explanation completeness. For this reason, long-email prevalence is treated as a documented constraint rather than an implementation detail.
 
 \subsubsection{Model Fine-Tuning and Decision Thresholding}
 
-The phishing detector is implemented by fine-tuning bert-base-uncased for binary sequence classification~[6]. The model produces a phishing probability for each email . Predictions are operationalized through probability thresholding:
+The phishing detector is implemented by fine-tuning bert-base-uncased for binary sequence classification~\cite{JMKK2019}. The model produces a phishing probability for each email . Predictions are operationalized through probability thresholding:
+
 The project reports results under the conventional threshold and additionally performs threshold tuning on the validation split to identify an operating point that maximizes F1. This evaluation design reflects SOC deployment realities, where thresholds are frequently adjusted to prioritize either higher recall (minimizing missed phishing) or higher precision (minimizing disruption from false positives).
 
 \subsubsection{Explainability Methods (Phishing)}
 
 To produce analyst-facing evidence for each email-level prediction, the phishing branch implements two explanation streams: SHAP-based token contributions and attention-derived focus tokens.
-SHAP token attributions are used to estimate which tokens increase or decrease the phishing probability~[5]. This method is particularly useful for reporting because it produces signed contribution signals that can be summarized as “supporting” or “opposing” evidence tokens in analyst-style narratives.
-Attention-derived tokens are extracted as a comparative signal from the transformer. However, attention is not assumed to be a faithful explanation by default. The project explicitly treats attention as an interpretable internal signal that must be evaluated, consistent with prior work showing that attention weights can be unreliable as explanations if not validated~[7]. For this reason, the methodology compares attention tokens to SHAP tokens using explanation-quality measurements rather than presenting attention as definitive causal evidence.
+
+SHAP token attributions are used to estimate which tokens increase or decrease the phishing probability~\cite{LL2017}. This method is particularly useful for reporting because it produces signed contribution signals that can be summarized as “supporting” or “opposing” evidence tokens in analyst-style narratives.
+
+Attention-derived tokens are extracted as a comparative signal from the transformer. However, attention is not assumed to be a faithful explanation by default. The project explicitly treats attention as an interpretable internal signal that must be evaluated, consistent with prior work showing that attention weights can be unreliable as explanations if not validated~\cite{JW2019}. For this reason, the methodology compares attention tokens to SHAP tokens using explanation-quality measurements rather than presenting attention as definitive causal evidence.
 
 \subsubsection{Explanation Quality Evaluation}
 
 To avoid treating explanations as purely qualitative outputs, the phishing branch evaluates explanation quality using two measurable properties: faithfulness and stability.
+
 Faithfulness is assessed using deletion/insertion-style behavior checks: if an explanation method identifies certain tokens as important, removing those tokens should tend to reduce phishing probability, while emphasizing them should tend to increase it. These tests operationalize whether highlighted tokens correspond to model-sensitive evidence rather than superficial correlations.
+
 Stability is assessed by measuring overlap of top-ranked tokens under small text perturbations. The project uses Jaccard similarity to quantify overlap between two top- token sets and :
+
 Higher Jaccard overlap indicates that explanations remain consistent under minor input variation, which is important for analyst trust because unstable explanations can appear arbitrary even if classification accuracy is high.
 
 \subsubsection{Implementation and Reproducibility Workflow (Professional Description)}
 
 The phishing pipeline follows a structured workflow designed for repeatable experimentation and report-ready outputs. First, dataset preparation is performed deterministically (cleaning, deduplication, stratified splitting) and the resulting dataset statistics are recorded. Second, the transformer model is fine-tuned using a fixed tokenization policy and controlled training configuration, and the best-performing model state is retained for downstream evaluation and explanation generation. Third, explainability artifacts are generated for a defined evaluation subset to balance computational cost with interpretability coverage, and the resulting outputs are compiled into analyst-facing summaries and comparison tables. Finally, explanation quality metrics are computed to support evidence-based comparison of SHAP and attention streams.
-This workflow produces a consistent chain from raw email text to predicted probability, token-level evidence, and quantitative explanation diagnostics---supporting both academic reporting and practical interpretability expectations in cybersecurity contexts.
 
+This workflow produces a consistent chain from raw email text to predicted probability, token-level evidence, and quantitative explanation diagnostics---supporting both academic reporting and practical interpretability expectations in cybersecurity contexts.
 
 \section{Implementation and Results}
 
 \subsection{Chapter Purpose and Structure}
 
 This chapter reports the outcomes of the implemented system and analyzes their implications for cybersecurity decision-making. Rather than listing metrics in isolation, the analysis connects performance numbers to operational realities, specifically the trade-off between false alarms (false positives) and missed threats (false negatives), and validates individual predictions using explainability outputs.
+
 The chapter is organized into two primary research branches, each following a consistent evaluation protocol:
+
 Branch A: Static Malware Detection (Portable Executable Artifacts)
+
 Implementation Prerequisites: A detail of critical implementation choices that materially affect results, including feature normalization, dimensional alignment, and decision threshold selection.
+
 Quantitative Performance: A report on final test accuracy and F1-scores, supported by confusion matrices to visualize error distribution.
+
 Explainability Report: A demonstration of how model outputs (e.g., feature attributions) can be interpreted by analysts to justify specific detection decisions.
+
 Branch B: Phishing Email Detection (Natural Language Text)
+
 Implementation Prerequisites: A review of text preprocessing, tokenization, and fine-tuning strategies used to prepare the model.
+
 Quantitative Performance: A report on classification metrics, focusing on the model's ability to distinguish deceptive intent from legitimate communication.
+
 Explainability Report: A demonstration of token-level impact analysis to highlight the specific linguistic triggers behind phishing alerts.
 
 \subsection{Malware Detection: Implementation and Results}
@@ -277,31 +398,129 @@ For each test sample i, the model outputs a malware probability p\_i = p(y=1 | x
 \subsubsection{Final Test Performance}
 
 Table 4.1 summarizes the final test performance for TabOnly (baseline) and Fusion Tab+CNN (main). Fusion is reported as the primary outcome, while TabOnly provides a reference point for quantifying the benefit of multimodal fusion.
-Comparison to official EMBER2024 baselines. To contextualize the results in Table 4.1, I compare them with the official EMBER2024 benchmark models reported by Joyce et al. and distributed with example scripts~[1, 37]. The published baseline for malicious/benign detection is reported using threshold-independent operating metrics (ROC AUC = 0.9949 and TPR = 94.48\% at 1\% FPR)~[1]. While my primary reporting in this chapter uses Accuracy/F1 at selected operating thresholds (τ = 0.50 and best-F1), the comparison is still useful: the EMBER2024 benchmark demonstrates that engineered PE features can yield very strong separability on the test distribution, and my TabOnly and Fusion models aim to achieve comparable operational performance while additionally producing analyst-oriented explanations (Integrated Gradients for tabular evidence and Grad-CAM for structural section images).
-Table 4.1. Malware detection performance at τ=0.50 and at the best-F1 threshold from the sweep.
-Figure 4.1 provides a compact visualization of the same comparison. The main takeaway is that fusion improves recall and F1, meaning it catches more malicious samples while maintaining strong precision.
-Figure 4.1. Malware performance comparison (Accuracy, F1, Recall) for TabOnly and Fusion at two operating points.
+
+Comparison to official EMBER2024 baselines. To contextualize the results in Table 4.1, I compare them with the official EMBER2024 benchmark models reported by Joyce et al. and distributed with example scripts [1, 37]. The published baseline for malicious/benign detection is reported using threshold-independent operating metrics (ROC AUC = 0.9949 and TPR = 94.48\% at 1\% FPR) [1]. While my primary reporting in this chapter uses Accuracy/F1 at selected operating thresholds (τ = 0.50 and best-F1), the comparison is still useful: the EMBER2024 benchmark demonstrates that engineered PE features can yield very strong separability on the test distribution, and my TabOnly and Fusion models aim to achieve comparable operational performance while additionally producing analyst-oriented explanations (Integrated Gradients for tabular evidence and Grad-CAM for structural section images).
+
+
+\begin{table}[htbp]
+\centering
+\caption{Condensed Performance Comparison.}
+\label{tab:perf_small}
+\resizebox{\columnwidth}{!}{% % This scales the table to fit the text width
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model ($\tau$)} & \textbf{Acc.} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} \\ 
+\midrule
+TabOnly (0.50) & 0.9123 & 0.9538 & 0.8666 & 0.9081 \\
+TabOnly (0.35) & 0.9170 & 0.9183 & 0.9154 & 0.9169 \\
+\midrule
+Fusion (0.50)  & 0.9406 & 0.9616 & 0.9179 & 0.9392 \\
+\textbf{Fusion (0.35)} & \textbf{0.9420} & \textbf{0.9432} & \textbf{0.9406} & \textbf{0.9419} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+%Table 4.1. Malware detection performance at τ=0.50 and at the best-F1 threshold from the sweep.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.1.png}
+    \caption{Malware performance comparison (Accuracy, F1, Recall) for TabOnly and Fusion at two operating points.}
+    \label{fig:malware-comparison-4-1}
+\end{figure}
+
+
+%Figure 4.1 provides a compact visualization of the same comparison. The main takeaway is that fusion improves recall and F1, meaning it catches more malicious samples while maintaining strong precision.
+
+%Figure 4.1. Malware performance comparison (Accuracy, F1, Recall) for TabOnly and Fusion at two operating points.
 
 \subsubsection{Confusion Matrices and Operational Interpretation}
 
 Confusion matrices translate abstract metrics into tangible operational costs. In the context of malware triage, False Negatives (FN) correspond to malware that evades blocking and reaches endpoints (risk of compromise), while False Positives (FP) correspond to benign files that are incorrectly quarantined or escalated (business disruption).
+
 At the standard threshold , the Fusion model substantially reduces the number of missed malware samples compared to the TabOnly baseline. This reduction represents a meaningful security improvement at the default operating point, as it directly lowers the probability of infection without relying on aggressive threshold tuning.
-Figure 4.2. TabOnly confusion matrix at τ=0.50.
-Figure 4.3. Fusion Tab+CNN confusion matrix at τ=0.50.
-Figure 4.4. TabOnly confusion matrix at τ=0.35 (best-F1).
-Figure 4.5. Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.2.png}
+    \caption{Figure 4.2. TabOnly confusion matrix at τ=0.50.}
+    \label{fig:figure-4-1}
+\end{figure}
+
+%Figure 4.2. TabOnly confusion matrix at τ=0.50.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.3.png}
+    \caption{Figure 4.3. Fusion Tab+CNN confusion matrix at τ=0.50.}
+    \label{fig:figure-4-3}
+\end{figure}
+
+%Figure 4.3. Fusion Tab+CNN confusion matrix at τ=0.50.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.4.png}
+    \caption{Figure 4.4. TabOnly confusion matrix at τ=0.35 (best-F1).}
+    \label{fig:figure-4-4}
+\end{figure}
+
+%Figure 4.4. TabOnly confusion matrix at τ=0.35 (best-F1).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.5.png}
+    \caption{Figure 4.5. Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).}
+    \label{fig:figure-4-5}
+\end{figure}
+
+%Figure 4.5. Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).
 
 \subsubsection{Explainability Report for Malware: Integrated Gradients and Grad-CAM}
 
 To make malware decisions reviewable, we generate explanations that align with the multimodal architecture. For the tabular branch, Integrated Gradients (IG) produces a signed attribution score per feature: positive values push the model toward malware, negative values push it toward benign. For the CNN branch, Grad-CAM produces a heatmap over the section-structure representation, indicating which regions contributed most to the malware class score. Together, these outputs provide two complementary forms of evidence: ‘which PE features mattered’ and ‘which structural regions mattered.’
+
 Global IG summary (model-wide feature importance)
+
 Global IG summarizes which features consistently influence predictions across many samples. Table 4.2 lists the top-ranked features by mean absolute IG magnitude. Even when feature identifiers are not semantically descriptive, this ranking is valuable for reproducibility and for later mapping to feature groups (e.g., byte statistics, entropy-related features, or section-derived indicators).
-Table 4.2. Top-10 global mean absolute IG features (Fusion model).
+
+
+\begin{table}[htbp]
+\centering
+\caption{Top-10 global mean absolute IG features (Fusion model).}
+\label{tab:feature_rank}
+\begin{tabularx}{\columnwidth}{clX} % 'X' makes the feature column flexible
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Mean $|IG|$} \\ 
+\midrule
+1  & byte\_feature\_217    & 0.7432 \\
+2  & byte\_feature\_105    & 0.7342 \\
+3  & section\_feature\_512 & 0.6146 \\
+4  & section\_feature\_435 & 0.4992 \\
+5  & byte\_feature\_103    & 0.4979 \\
+6  & section\_feature\_256 & 0.3981 \\
+7  & byte\_feature\_145    & 0.3909 \\
+8  & byte\_feature\_129    & 0.3849 \\
+9  & byte\_feature\_124    & 0.3686 \\
+10 & section\_feature\_486 & 0.3637 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%Table 4.2. Top-10 global mean absolute IG features (Fusion model).
+
 Local IG + Grad-CAM: four representative case studies
+
 Local explanations are critical for incident response because analysts validate individual alerts. We therefore generated local IG attributions and Grad-CAM heatmaps for four representative test indices. These examples were selected to cover different decision regimes: low-confidence malware, high-confidence benign, high-confidence malware, and a borderline benign case near common operating thresholds.
+
 Table 4.3. Local explanation summary for four representative malware samples (Fusion model). POS increases malware probability; NEG decreases it.
+
 A useful detail for interpreting Table 4.3 is that IG explanations are additive and signed, so they naturally show both supporting and suppressing evidence. In other words, the model may find some features that look benign (negative attribution) even in a malware sample, but the final probability reflects the net effect of all features and the CNN branch. This push-pull behavior is particularly informative for borderline cases because it reveals why the model hesitated.
+
 Grad-CAM heatmaps (CNN branch evidence)
+
 Figures 4.6 through 4.9 present the Grad-CAM heatmaps for the corresponding samples. These visualizations indicate where the CNN branch identifies discriminative structural evidence within the section representation. In practice, these heatmaps serve as visual ‘pointers’ for analysts; they do not replace full reverse engineering but efficiently highlight which parts of the structural view were most influential in the model’s decision.
 
 \subsubsection{What the Malware Results Mean}
@@ -312,89 +531,216 @@ The malware results support three conclusions. First, Fusion Tab+CNN consistentl
 
 \subsubsection{Dataset Preparation and Experimental Setup}
 
-For phishing detection, we trained a binary text classifier to separate phishing emails from safe emails using a Kaggle-hosted dataset~[8]. Because phishing corpora often contain duplicates, formatting noise, and missing content, we performed explicit cleaning and deduplication before splitting. This step is essential for trustworthy reporting: duplicates can leak across splits and artificially inflate test accuracy, while noisy/empty messages reduce the meaningfulness of token-level explanations.
+For phishing detection, we trained a binary text classifier to separate phishing emails from safe emails using a Kaggle-hosted dataset~\cite{phishingDT}. Because phishing corpora often contain duplicates, formatting noise, and missing content, we performed explicit cleaning and deduplication before splitting. This step is essential for trustworthy reporting: duplicates can leak across splits and artificially inflate test accuracy, while noisy/empty messages reduce the meaningfulness of token-level explanations.
+
+
+\begin{table}[htbp]
+\centering
+\caption{Cleaning and deduplication summary for the phishing dataset.}
+\label{tab:phishing_cleanup}
+\begin{tabularx}{\columnwidth}{@{} X r @{}} 
+\toprule
+\textbf{Processing step} & \textbf{Rows remaining} \\ 
+\midrule
+Original dataset & 18,650 \\
+After removing missing entries & 18,634 \\
+After removing very short emails ($<30$ chars) & 18,048 \\
+After deduplication & 17,486 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
 Table 4.4. Cleaning and deduplication summary for the phishing dataset.
+
 After cleaning, we created stratified train/validation/test splits to keep label ratios consistent across splits. The final label counts are shown in Table 4.5.
+
 Table 4.5. Stratified split label counts for phishing detection.
+
 Token-length distribution and truncation effects
+
 Transformer models impose an input-length constraint, so emails longer than the configured maximum token length are truncated. In my pipeline, we used a maximum sequence length of 384 tokens for training and explainability runs. Figure 4.10 visualizes the measured token-length distribution; Table 4.6 reports how often emails exceed key limits. These measurements matter because truncation can remove the decisive phishing request or the malicious link if it appears late in the message, and truncation also constrains how complete token-level explanations can be.
-Figure 4.10. Token-length distribution of emails in the cleaned dataset (WordPiece tokens).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.10.png}
+    \caption{Figure 4.10. Token-length distribution of emails in the cleaned dataset (WordPiece tokens).}
+    \label{fig:figure-4-10}
+\end{figure}
+
+%Figure 4.10. Token-length distribution of emails in the cleaned dataset (WordPiece tokens).
+
 Table 4.6. Frequency of long emails relative to the chosen maximum length and BERT’s typical limit.
 
 \subsubsection{Classification Results}
 
 Table 4.7 reports the test performance at the default τ=0.50 and at the best-F1 threshold selected on the validation set (τ$\approx$0.47). The classifier achieves very high performance on this dataset, with only a small number of false positives and false negatives. Even when overall accuracy is high, we still report confusion matrices because the cost of missing phishing (FN) is often higher than the cost of a false alarm (FP) in security operations.
+
 Table 4.7. Phishing detection performance on the test set at two operating points.
-Figure 4.11. Confusion matrix for phishing detection at τ=0.50.
-Figure 4.12. Confusion matrix for phishing detection at τ=0.47 (best-F1 on validation).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.11.png}
+    \caption{Figure 4.11. Confusion matrix for phishing detection at τ=0.50.}
+    \label{fig:figure-4-11}
+\end{figure}
+
+%Figure 4.11. Confusion matrix for phishing detection at τ=0.50.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.12.png}
+    \caption{Figure 4.12. Confusion matrix for phishing detection at τ=0.47 (best-F1 on validation).}
+    \label{fig:figure-4-12}
+\end{figure}
+
+%Figure 4.12. Confusion matrix for phishing detection at τ=0.47 (best-F1 on validation).
 
 \subsubsection{Explainability Report for Phishing: SHAP and Attention}
 
 Given that phishing is a language-based social-engineering attack, we treat explanations as an integral component of the detection pipeline rather than an optional add-on. For each evaluated email, the system produces two complementary explanation artifacts: (i) SHAP token-impact explanations and (ii) attention-based focus tokens.
+
 SHAP (Shapley Additive Explanations): Explains decision influence by assigning signed contribution values to individual tokens. This indicates precisely whether a specific word pushes the model’s probability toward ‘Phishing’ (positive contribution) or ‘Safe’ (negative contribution).
+
 Attention Mechanisms: Explain the model’s internal focus by highlighting which tokens received the highest weighting during the encoding phase.
+
 These methods are presented in tandem because they offer distinct, complementary insights: SHAP is theoretically grounded in decision contribution (answering “why”), while attention often produces visually intuitive highlights that align with human reading patterns (answering “where”).
+
 Representative SHAP token-impact plots (main text)
+
 Figures 4.13--4.16 show four representative SHAP token-impact plots selected from the evaluation subset. These plots are interpreted as follows: tokens on the positive side increase the phishing probability, while tokens on the negative side decrease it. In analyst terms, the positive-side tokens are the strongest ‘evidence words’ supporting the phishing decision for that email.
-Figure 4.13. SHAP token-impact plot (representative example from the evaluation subset).
-Figure 4.14. SHAP token-impact plot (representative example from the evaluation subset).
-Figure 4.15. SHAP token-impact plot (representative example from the evaluation subset).
-Figure 4.16. SHAP token-impact plot (representative example from the evaluation subset).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.13.png}
+    \caption{Figure 4.13. SHAP token-impact plot (representative example from the evaluation subset).}
+    \label{fig:figure-4-13}
+\end{figure}
+
+%Figure 4.13. SHAP token-impact plot (representative example from the evaluation subset).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.14.png}
+    \caption{Figure 4.14. SHAP token-impact plot (representative example from the evaluation subset).}
+    \label{fig:figure-4-14}
+\end{figure}
+
+%Figure 4.14. SHAP token-impact plot (representative example from the evaluation subset).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.15.png}
+    \caption{Figure 4.15. SHAP token-impact plot (representative example from the evaluation subset).}
+    \label{fig:figure-4-15}
+\end{figure}
+
+%Figure 4.15. SHAP token-impact plot (representative example from the evaluation subset).
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.16.png}
+    \caption{Figure 4.16. SHAP token-impact plot (representative example from the evaluation subset).}
+    \label{fig:figure-4-16}
+\end{figure}
+
+%Figure 4.16. SHAP token-impact plot (representative example from the evaluation subset).
+
 Qualitative comparison: SHAP vs attention tokens
+
 To show how the two explanation streams behave on the same emails, Table 4.8 reports, for each example, the top SHAP-positive tokens, top SHAP-negative tokens, and the top attention focus tokens. This side-by-side comparison is particularly useful for reviewers: it makes it clear when attention is aligned with the words that actually drive the decision and when it emphasizes tokens that are less decision-critical.
+
 Table 4.8. SHAP vs attention comparison across the evaluated email subset (12 examples).
+
 Worked explanation examples (how to read the outputs)
+
 Example 1 (E00): The SHAP-positive tokens emphasize the actionable or urgent phrases that increase phishing probability, while the SHAP-negative tokens capture language that reduces suspicion. In this example, the attention tokens partially overlap with the SHAP-positive evidence but also include generic tokens, illustrating why attention should be treated as ‘focus’ rather than a faithful causal explanation.
+
 Example 2 (E04): The SHAP-positive tokens again concentrate on request/credential/action language and identity cues, which is consistent with common phishing strategies. When attention focuses on similar cues, it provides an intuitive highlight; when it diverges toward repeated or formatting-related tokens, SHAP remains the more decision-oriented evidence stream.
 
 \subsubsection{Explanation Quality: Faithfulness and Stability}
 
 To evaluate explanation quality rather than assuming it, we measured faithfulness and stability on a balanced subset of 12 test emails. Faithfulness is tested by deleting the top-k tokens selected by an explanation and measuring how much the phishing probability changes. Stability is tested by perturbing the input slightly and measuring the overlap (Jaccard similarity) between the top-k token sets.
-Figure 4.17. Faithfulness (deletion test): mean probability change after removing top-k tokens.
-Figure 4.18. Stability: mean Jaccard overlap of top-k tokens under perturbations.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.17.png}
+    \caption{Figure 4.17. Faithfulness (deletion test): mean probability change after removing top-k tokens.}
+    \label{fig:figure-4-17}
+\end{figure}
+
+%Figure 4.17. Faithfulness (deletion test): mean probability change after removing top-k tokens.
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{Figures/Figure 4.18.png}
+    \caption{Figure 4.18. Stability: mean Jaccard overlap of top-k tokens under perturbations.}
+    \label{fig:figure-4-18}
+\end{figure}
+
+%Figure 4.18. Stability: mean Jaccard overlap of top-k tokens under perturbations.
+
 Table 4.9. Explanation quality metrics (faithfulness and stability) on the evaluated subset (n=12).
+
 The results show a clear trade-off. Attention-based explanations are more stable (higher Jaccard overlap), meaning they tend to highlight similar tokens under small perturbations. SHAP exhibits larger effects in the deletion test at k=10, meaning that removing SHAP-selected tokens changes the model score more, which is consistent with SHAP being a contribution-focused explanation. In practice, this supports using SHAP for decision evidence and attention for stable highlighting, while explicitly documenting their different properties.
 
 \subsubsection{What the Phishing Results Mean}
 
 The phishing branch achieves very strong predictive performance on the cleaned dataset, and the confusion matrices show that false positives are rare. However, the token-length analysis demonstrates a realistic limitation: a non-trivial fraction of emails exceed the configured maximum length, so some decisions and explanations are based on truncated content. The explainability report shows how evidence tokens can be surfaced for analyst review, and the quantitative evaluation of explanation quality provides an evidence-based comparison rather than relying on visual impressions alone.
 
-
 \section{Discussion and Limitations}
 
 This chapter interprets the implementation outcomes and empirical results presented in Chapter 4, analyzing their broader implications for explainable cybersecurity threat detection.
+
 The discussion is organized around three primary analytical dimensions:
+
 Multimodal Improvement Analysis: An examination of why the multimodal malware fusion model outperformed the tabular baseline, focusing on the specific contributions of the structural view versus the engineered features.
+
 Phishing Operational Implications: An interpretation of what the phishing email detection results imply for practical email security, particularly regarding the reliability of language models in intercepting social engineering attacks.
+
 Limitations and Scope: A critical assessment of the specific limitations that define the boundary of the claims in this report, ensuring the validity of the findings is properly scoped.
+
 Where relevant, the chapter also provides evidence-based recommendations for how the system should be operated and extended in future work.
 
 \subsection{Discussion}
 
 \subsubsection{Malware detection: key outcomes and why they matter}
 
-In the malware component, we implemented two PE-based classifiers on the sharded EMBER2024 feature format: a tabular-only baseline (TabOnly, 515-dimensional after ablation) and a multimodal fusion model that combines the same tabular vector with a CNN representation of section-structure images (Fusion Tab+CNN). Both models output a probability score for the malicious class and a binary decision derived from a configurable threshold. The design goal was not only high accuracy but also explainability Integrated Gradients (IG)~[4] was used to attribute the tabular contribution, and Grad-CAM~[3] was used to localize the CNN evidence on the section-image representation.
+In the malware component, we implemented two PE-based classifiers on the sharded EMBER2024 feature format: a tabular-only baseline (TabOnly, 515-dimensional after ablation) and a multimodal fusion model that combines the same tabular vector with a CNN representation of section-structure images (Fusion Tab+CNN). Both models output a probability score for the malicious class and a binary decision derived from a configurable threshold. The design goal was not only high accuracy but also explainability Integrated Gradients (IG)~\cite{MAQ2017} was used to attribute the tabular contribution, and Grad-CAM~\cite{SCDVPB2017} was used to localize the CNN evidence on the section-image representation.
+
 The evaluation results show a consistent advantage for multimodal fusion. At the standard 0.50 decision threshold, the tabular baseline achieved an accuracy of 0.9123 with malicious-class F1 of 0.9081 and malicious recall of 0.8666. The fusion model improved the same operating point to 0.9406 accuracy, 0.9392 malicious F1, and 0.9179 malicious recall. In operational terms, the most important improvement is the reduction in false negatives: the fusion model missed substantially fewer malicious files than the tabular-only model at the default threshold. In many cybersecurity settings, this is a high-impact gain, because a single missed malware sample can translate into downstream compromise risk, whereas a small increase in false positives can often be managed through triage policies.
 
 \subsubsection{Why multimodal fusion improved malware detection}
 
 The performance gap between TabOnly and Fusion is consistent with the idea that tabular PE features and section-structure representations encode complementary evidence. The tabular vector summarizes file properties as engineered statistics (e.g., byte-level distributions and other numeric descriptors). This representation is compact and highly informative, but it is also vulnerable to feature ambiguity: different malware families can share similar statistics, and sophisticated packing or obfuscation strategies can reduce the separability of purely engineered features.
+
 By contrast, the section-image branch encodes a different view of the binary structural layout and relative patterns derived from section information. Even when a malware sample manipulates some global statistics, structural cues can remain informative (for example, abnormal section composition or atypical patterns in the section-derived representation). Fusion effectively behaves like an analyst combining multiple kinds of evidence: a numerical profile plus a structural profile. This reduces over-reliance on any single feature group and tends to improve recall in heterogeneous malware collections.
 
 \subsubsection{Threshold behavior and deployment interpretation (malware)}
 
 A notable observation from the threshold sweep is that both models achieved their best malicious F1 at a lower threshold (0.35) than the default 0.50. For the fusion model, the best scanned point (0.35) reached 0.9420 accuracy with malicious precision of 0.9432, recall of 0.9406, and F1 of 0.9419. This confirms that the probability outputs are sufficiently calibrated for policy-driven tuning: by lowering the threshold, the system increases malware capture (recall) at the cost of higher false positives.
+
 Importantly, threshold selection is not only a technical choice; it is a risk-management policy. In a high security environment, a lower threshold may be justified to reduce missed malware, provided that the organization can handle additional triage. In environments with limited analyst capacity, a higher threshold may be preferable to reduce alert volume. The results in this report demonstrate that the fusion model supports this operational flexibility by offering a strong baseline at 0.50 and an improved balanced point at 0.35.
 
 \subsubsection{Explainability contribution (malware): what IG and Grad-CAM add}
 
 The explainability pipeline materially strengthens the malware component beyond raw metrics. IG provides directional attributions on the tabular features, which can be interpreted as evidence that pushes the model toward malicious or benign predictions. Grad-CAM, applied to the CNN branch, produces spatial localization maps on the section-image representation, showing where the fusion model concentrated its structural evidence.
+
 From a security workflow perspective, this pairing creates a two-view explanation: (i) which engineered features mattered most and whether they supported or suppressed the malicious decision (IG), and (ii) which structural regions the CNN considered influential (Grad-CAM). This is particularly valuable in borderline or error cases (e.g., low-confidence malware or near-threshold benign samples), because the explanations offer a rationale that can inform whether an analyst should quarantine, block, or escalate the file for deeper analysis.
 
 \subsubsection{Phishing email detection: key outcomes and what they imply}
 
-In the phishing branch, we implemented an end-to-end pipeline that detects phishing emails with a fine-tuned BERT-based classifier~[28] and produces analyst-oriented explanations using token-level SHAP impact and attention token focus. Unlike many purely accuracy-focused classifiers, this pipeline was designed to make the model’s decisions interpretable and auditable through both qualitative artifacts (plots, tables, analyst cards) and quantitative explanation-quality measurements.
+In the phishing branch, we implemented an end-to-end pipeline that detects phishing emails with a fine-tuned BERT-based classifier~\cite{KBSSSK2025} and produces analyst-oriented explanations using token-level SHAP impact and attention token focus. Unlike many purely accuracy-focused classifiers, this pipeline was designed to make the model’s decisions interpretable and auditable through both qualitative artifacts (plots, tables, analyst cards) and quantitative explanation-quality measurements.
+
 The dataset preparation decisions have direct implications for credibility. After removing missing entries, filtering invalid labels, removing very short texts, and deduplicating to reduce leakage risk, the final cleaned dataset contained 17,486 emails (10,967 safe and 6,519 phishing). Deduplication is particularly important: if identical or near-identical emails appear across splits, reported test performance can be artificially inflated without representing true generalization.
+
 On the cleaned test set, the classifier achieved strong performance at the default 0.50 threshold: accuracy 0.9926, precision 0.9953, recall 0.9847, and F1 0.9900. The confusion matrix shows a very small number of false positives (3 safe emails incorrectly flagged) and a small number of false negatives (10 phishing emails missed). From a SOC perspective, the low false-positive rate reduces analyst alert fatigue, while the remaining false negatives represent the primary residual risk. Threshold tuning was explored and found a validation best-F1 operating point around 0.47, reinforcing that probability thresholds can be aligned to different operational policies.
 
 \subsubsection{Long-email reality and model context limits (phishing)}
@@ -403,7 +749,8 @@ A major practical insight from the phishing experiments is the prevalence of lon
 
 \subsubsection{Explainability outcomes (phishing): SHAP vs attention in practice}
 
-The project intentionally produced two explanation views that answer different questions. Token-level SHAP~[5] estimates the impact of individual tokens on the prediction, supporting an evidence-oriented narrative (‘these words pushed the email toward phishing’). Attention-based explanations (see the discussion on limits of attention as explanation)~[7] instead show where the model concentrated its focus while processing the text. In the analyst setting, SHAP better supports justification, while attention can provide a stable and fast salience signal.
+The project intentionally produced two explanation views that answer different questions. Token-level SHAP~\cite{LL2017} estimates the impact of individual tokens on the prediction, supporting an evidence-oriented narrative (‘these words pushed the email toward phishing’). Attention-based explanations (see the discussion on limits of attention as explanation)~\cite{JW2019} instead show where the model concentrated its focus while processing the text. In the analyst setting, SHAP better supports justification, while attention can provide a stable and fast salience signal.
+
 To avoid relying only on visual examples, we measured explanation quality using faithfulness (deletion and insertion tests) and stability (Jaccard overlap under small perturbations). In the evaluated runs, attention tokens showed higher stability than SHAP (mean Top-10 Jaccard overlap 0.6675 for attention versus 0.3288 for SHAP), meaning attention-based token sets were less sensitive to small input changes. However, the faithfulness measurements suggest a weaker decision-impact signal for attention in this specific setup (mean deletion Δ=0.0000 for attention versus 0.0036 for SHAP). In insertion tests, the mean predicted phishing probability using only the selected tokens was 0.7238 for attention and 0.6910 for SHAP. Taken together, the most defensible conclusion is that SHAP is more aligned with decision impact, while attention is more stable as a focus indicator; using both can provide complementary insight rather than treating either as universally superior.
 
 \subsection{Limitations}
@@ -411,32 +758,40 @@ To avoid relying only on visual examples, we measured explanation quality using 
 \subsubsection{Malware detection limitations}
 
 Dataset and labeling constraints. Static malware datasets often reflect labeling derived from antivirus consensus or detection heuristics rather than ground-truth behavioral verification. This introduces label noise risk, especially for borderline samples (potentially unwanted programs, grayware, or newly emerging families). As a result, performance metrics should be interpreted as effectiveness on the dataset’s labeling standard rather than as an absolute guarantee of real-world correctness.
+
 Generalization and temporal drift. Malware evolves rapidly, and a model trained on a fixed historical distribution can degrade when deployed against new packing techniques, novel families, or shifting ecosystem trends. The reported test results are strong within the prepared split, but external validation on more recent or geographically distinct corpora would be required to claim robust long-term generalization.
+
 Feature schema sensitivity (516 $\rightarrow$ 515 ablation). The final evaluated checkpoints used a 515-dimensional input, while the raw shards were 516-dimensional. This introduced implementation complexity and makes the pipeline sensitive to feature schema changes. Although the project resolved this through consistent dimension forcing and matching normalization statistics, it highlights the need for strict feature versioning and careful checkpoint--schema alignment in any future extension.
+
 Explainability constraints (IG and Grad-CAM). IG attributions depend on the choice of baseline and background distribution and may vary across these choices. Grad-CAM provides localization of CNN influence but does not prove causality; it highlights correlated regions that influence activations, and results can depend on the chosen layer and upscaling method. Therefore, both explanation types should be treated as supportive evidence for analyst triage, not as definitive proof of maliciousness.
+
 Evaluation scope. The current evaluation focused on accuracy, precision, recall, F1, and threshold sweeps. In operational environments, additional diagnostics may be important, including PR-AUC/ROC-AUC, probability calibration, per-family performance breakdowns, robustness against packing/obfuscation, and concept-drift monitoring. These were outside the immediate implementation scope but are relevant for deployment-grade assessment.
 
 \subsubsection{Phishing email detection limitations}
 
 Dataset representativeness. The phishing dataset used in this project is a curated corpus with its own collection and labeling assumptions. Real-world phishing campaigns shift rapidly with current events, locale, language, and industry context. Consequently, the reported high test performance should be interpreted as strong in-domain effectiveness, not as universal performance across all email environments without further external validation.
+
 Long-context truncation. A significant fraction of emails exceeded the selected maximum input length, meaning that some emails were partially truncated before classification and explanation. This can hide phishing cues that occur late in the message and can cause explanations to over-emphasize early content. While this limitation was quantified and documented, future versions should address it explicitly (e.g., chunking strategies or long-context transformer variants).
+
 Explainability method limits. SHAP explanations are computationally intensive, and token-level masking interacts with subword tokenization, which can reduce interpretability for non-technical readers. Attention explanations are easier to generate and often stable, but attention weights are not guaranteed to correspond to causal evidence. The measured faithfulness and stability metrics in this report reflect these trade-offs and indicate that explainability should be interpreted with method-specific caution.
+
 Evaluation sample size for explanation quality. Explanation-quality metrics were computed on a deliberately small balanced set of evaluated samples to keep the pipeline practical. While this is acceptable for a project report and for illustrating method behavior, broader evaluation would strengthen the statistical confidence of the explanation-quality conclusions.
 
 \subsection{Lessons learned and practical recommendations}
 
 Use fusion as the primary malware detector and keep TabOnly as a documented baseline. The fusion model consistently improved recall and F1 while retaining strong precision, and it provides richer evidence for analysts through combined IG and Grad-CAM outputs. Maintaining the tabular-only baseline remains valuable for ablation comparison and for faster ‘first-pass’ screening when compute is constrained.
+
 Treat threshold selection as an explicit deployment policy. The report demonstrates that thresholds can shift the system from conservative blocking toward higher malware/phishing capture. A recommended operational pattern is to define at least two modes: (i) a conservative mode for low-noise environments and (ii) a high-recall mode for high-security environments or for quarantine/secondary review workflows.
+
 Strengthen semantic interpretability of features and explanations. On the malware side, more descriptive feature naming (mapping indices to meaningful PE-related descriptors) would improve analyst comprehension of IG tables. On the phishing side, explanation presentation can be further improved by grouping tokens into higher-level cues (e.g., urgency, credential request, link/domain patterns) and by integrating URL-specific features and link analysis into the explanation card.
-Address long-email handling explicitly. Future work should implement strategies such as sliding-window scoring, first+last chunk processing, or long-context transformer variants (e.g., Longformer~[23] or BigBird~[22]) to reduce the risk that key phishing cues are truncated. This would also improve the fidelity of token-level explanations for long emails.
+
+Address long-email handling explicitly. Future work should implement strategies such as sliding-window scoring, first+last chunk processing, or long-context transformer variants (e.g., Longformer~\cite{IMA2020} or BigBird~\cite{ZGDAA2020}) to reduce the risk that key phishing cues are truncated. This would also improve the fidelity of token-level explanations for long emails.
 
 \subsection{Chapter summary}
 
 Overall, the malware results support the central claim that multimodal fusion (tabular PE features plus structural section representation) improves detection quality over a tabular-only baseline, primarily by reducing missed malware while maintaining strong precision. The phishing results demonstrate that a BERT-based classifier can achieve very high in-domain accuracy on a cleaned corpus, and that explanation artifacts can be produced and evaluated in a measurable way. At the same time, both branches have practical limitations dataset representativeness, generalization drift, feature-schema sensitivity, long-context truncation, and method-specific explainability constraints that define what can be confidently claimed and motivate the next engineering and research steps.
 
-
 \section{Conclusion and Future Work}
-
 
 \subsection{Chapter overview}
 
@@ -455,15 +810,14 @@ The malware experiments compared a tabular-only baseline against a multimodal fu
 \subsubsection{Threshold selection must be treated as an operational decision}
 
 The malware classifiers produce a continuous score that is converted into a binary decision using a threshold. Formally, for a file with predicted malware probability p(mal), the decision rule is:
+
 ŷ = 1  if  p(mal) $\geq$ τ,   else  ŷ = 0
+
 Results at the default threshold (τ = 0.50) represent a conservative operating point, while the threshold sweep identified a lower threshold that increased recall and yielded a more balanced F1 for the malware class. This confirms that the best threshold is not universal: it depends on alert tolerance, analyst capacity, and the relative cost of false positives versus false negatives. In practice, the system should expose τ as a configurable parameter and document the chosen operating point for any deployment scenario.
 
 \subsubsection{Explainability artifacts improved transparency and diagnostic value}
 
-Beyond the headline metrics, the malware branch produced explanations aligned with the model structure. Feature-level attributions for the tabular branch (via Integrated Gradients) made it possible to inspect which feature groups were driving predictions and to analyze borderline cases. For the fusion model, Grad-CAM added a visual perspective by highlighting spatial regions in the section-structure representation that most influenced the CNN pathway. Together, these two modalities provided an evidence package that supports three practical tasks:\\
-(1)~validating whether the model relies on plausible signals,\\
-(2)~supporting analyst triage for ambiguous cases, and\\
-(3)~enabling audit-friendly reporting by linking each prediction to an interpretable rationale.
+Beyond the headline metrics, the malware branch produced explanations aligned with the model structure. Feature-level attributions for the tabular branch (via Integrated Gradients) made it possible to inspect which feature groups were driving predictions and to analyze borderline cases. For the fusion model, Grad-CAM added a visual perspective by highlighting spatial regions in the section-structure representation that most influenced the CNN pathway. Together, these two modalities provided an evidence package that supports three practical tasks: (1) validating whether the model relies on plausible signals, (2) supporting analyst triage for ambiguous cases, and (3) enabling audit-friendly reporting by linking each prediction to an interpretable rationale.
 
 \subsubsection{Reproducibility depended on strict feature-schema and normalization alignment}
 
@@ -509,9 +863,7 @@ An immediate practical extension is to generate a unified analyst evidence card 
 
 \subsubsection{Phishing detection: handle long emails with long-context or chunk-based models}
 
-The most impactful improvement for phishing detection is robust handling of long inputs. Two direct options are\\
-(1)~chunk-based inference (sliding windows or first-and-last chunk strategies) and\\
-(2)~replacing the base encoder with long-context transformers designed for long documents, such as Longformer and BigBird~[9,10]. Both approaches would reduce the risk of missing phishing cues that occur after the truncation point and would allow explanations to cover a larger portion of each email.
+The most impactful improvement for phishing detection is robust handling of long inputs. Two direct options are (1) chunk-based inference (sliding windows or first-and-last chunk strategies) and (2) replacing the base encoder with long-context transformers designed for long documents, such as Longformer and BigBird~\cite{HP20182018}\cite{RBSBCN2017}. Both approaches would reduce the risk of missing phishing cues that occur after the truncation point and would allow explanations to cover a larger portion of each email.
 
 \subsubsection{Phishing detection: strengthen external validity and explanation evaluation scale}
 
@@ -524,11 +876,17 @@ Finally, both branches would benefit from monitoring mechanisms that detect perf
 \subsection{Closing statement}
 
 This project demonstrates that explainable AI can be operationally meaningful for cybersecurity threat detection when detection performance, threshold calibration, and evidence-oriented explanations are developed together. On the malware side, multimodal fusion improved detection and reduced missed malware while producing interpretable evidence through feature attributions and structural localization. On the phishing side, a fine-tuned transformer achieved strong detection performance and produced analyst-friendly token explanations, while the experiments highlighted the real-world challenge of long-email truncation. The proposed future work focuses on strengthening robustness, improving interpretability depth, and translating explanation artifacts into consistent analyst-ready outputs suitable for practical adoption.
+
 Acknowledgement
+
 I would like to express my deepest gratitude to my supervisor, Associate Professor Aleksandaer Shurbevski, for his invaluable guidance, patience, and constructive feedback throughout the duration of this project. His expertise and insight were instrumental in shaping the direction of this research.
+
 I am also sincerely grateful to my project sponsor, Professor Shozo Naito, for his generous support and for providing the resources and opportunities that made this work possible. His confidence in this project has been a great source of motivation.
+
 I would also like to extend my thanks to the faculty and staff of The Kyoto College of Graduate Studies for Informatics (KCGI) for providing a stimulating learning environment.
+
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
+
 \end{document}
