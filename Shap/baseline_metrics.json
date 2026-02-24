@@ -1,0 +1,18 @@
+{
+  "model": "EMBER2024_PE.model",
+  "split": "test",
+  "n_samples": 1080000,
+  "n_features": 2568,
+  "accuracy": 0.9803222222222222,
+  "roc_auc": 0.9981880554115227,
+  "confusion_matrix": [
+    [
+      531824,
+      8176
+    ],
+    [
+      13076,
+      526924
+    ]
+  ]
+}
