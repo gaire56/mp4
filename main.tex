@@ -1,12 +1,10 @@
 \documentclass[conference]{IEEEtran}
 
 \usepackage[noadjust]{cite}
-
 \usepackage{amsmath}
-
 \usepackage{graphicx}
-
 \usepackage{tikz-cd}
+\usepackage{booktabs}
 
 \title{Explainable AI for Effective Malware Detection and Triage}
 
@@ -489,9 +487,9 @@ The design goal is practical: keep inference scalable for millions of files whil
 \subsubsection{Decision Rule, Threshold Sweep, and Reported Metrics}
 
 For each test sample i, the model outputs a malware probability $p\_i = p(y=1 | x\_i)$.
-Given a decision threshold τ, the predicted label is $ŷ\_i(τ)=1$ if $p\_i \geq \tau$ and 0 otherwise.
+Given a decision threshold $\tau$, the predicted label is $\widehat{y}\_i(\tau)=1$ if $p\_i \geq \tau$ and 0 otherwise.
 From the resulting confusion matrix counts, we compute Accuracy, Precision (malicious), Recall (malicious), and F1 (malicious).
-Because operational malware detection often requires balancing false negatives (missed malware) against false positives (benign files escalated), we report results at the conventional τ=0.50 and also report the best-F1 operating point identified by sweeping τ over multiple values.
+Because operational malware detection often requires balancing false negatives (missed malware) against false positives (benign files escalated), we report results at the conventional \tau=0.50 and also report the best-F1 operating point identified by sweeping \tau over multiple values.
 
 \subsubsection{Final Test Performance}
 
@@ -522,7 +520,7 @@ Tab+ImgEmb LGBM (tuned) & 0.35 & 0.997949 & --- & --- & --- & 0.9801 \\
 
 
 %Table 4.1.
-Malware detection performance at τ=0.50 and at the best-F1 threshold from the sweep.
+Malware detection performance at \tau=0.50 and at the best-F1 threshold from the sweep.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.1.png}
@@ -549,54 +547,54 @@ This reduction represents a meaningful security improvement at the default opera
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.2.png}
 
-    \caption{Confusion matrix (Tab-only LGBM) at τ=0.50}
+    \caption{Confusion matrix (Tab-only LGBM) at \tau=0.50}
 
     \label{fig:figure-4-2}
 
 \end{figure}
 
 %Figure 4.2.
-TabOnly confusion matrix at τ=0.50.
+TabOnly confusion matrix at \tau=0.50.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.3.png}
 
-    \caption{Confusion matrix (Tab+ImgEmb LGBM) at τ=0.50}
+    \caption{Confusion matrix (Tab+ImgEmb LGBM) at \tau=0.50}
 
     \label{fig:figure-4-3}
 
 \end{figure}
 
 %Figure 4.3.
-Fusion Tab+CNN confusion matrix at τ=0.50.
+Fusion Tab+CNN confusion matrix at \tau=0.50.
 \iffalse
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.4.png}
 
-    \caption{Figure 4.4.
-    TabOnly confusion matrix at τ=0.35 (best-F1).}
+    \caption{%Figure 4.4.
+    TabOnly confusion matrix at \tau=0.35 (best-F1).}
 
     \label{fig:figure-4-4}
 
 \end{figure}
 
 %Figure 4.4.
-TabOnly confusion matrix at τ=0.35 (best-F1).
+TabOnly confusion matrix at \tau=0.35 (best-F1).
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.5.png}
 
-    \caption{Figure 4.5.
-    Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).}
+    \caption{%Figure 4.5.
+    Fusion Tab+CNN confusion matrix at \tau=0.35 (best-F1).}
 
     \label{fig:figure-4-5}
 
 \end{figure}
 
 %Figure 4.5.
-Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).
+Fusion Tab+CNN confusion matrix at \tau=0.35 (best-F1).
 \fi
 
 \subsubsection{Explainability Report for Malware: Integrated Gradients and Grad-CAM}
@@ -604,7 +602,7 @@ Fusion Tab+CNN confusion matrix at τ=0.35 (best-F1).
 To make malware decisions reviewable, we generate explanations that align with the multimodal architecture.
 For the tabular branch, Integrated Gradients (IG) produces a signed attribution score per feature: positive values push the model toward malware, negative values push it toward benign.
 For the CNN branch, Grad-CAM produces a heatmap over the section-structure representation, indicating which regions contributed most to the malware class score.
-Together, these outputs provide two complementary forms of evidence: ‘which PE features mattered' and ‘which structural regions mattered.'
+Together, these outputs provide two complementary forms of evidence: 'which PE features mattered' and `which structural regions mattered.'
 Global IG summary (model-wide feature importance)
 Global IG summarizes which features consistently influence predictions across many samples.
 Table 4.2 lists the top-ranked features by mean absolute IG magnitude.
@@ -650,13 +648,13 @@ This push-pull behavior is particularly informative for borderline cases because
 Grad-CAM heatmaps (CNN branch evidence)
 Figures 4.6 through 4.9 present the Grad-CAM heatmaps for the corresponding samples.
 These visualizations indicate where the CNN branch identifies discriminative structural evidence within the section representation.
-In practice, these heatmaps serve as visual ‘pointers' for analysts; they do not replace full reverse engineering but efficiently highlight which parts of the structural view were most influential in the model's decision.
+In practice, these heatmaps serve as visual `pointers' for analysts; they do not replace full reverse engineering but efficiently highlight which parts of the structural view were most influential in the model's decision.
 
 \subsubsection{What the Malware Results Mean}
 
 The malware results support three conclusions.
 First, Fusion Tab+CNN consistently outperforms the tabular baseline, indicating that the section-image branch contributes complementary information rather than redundant noise.
-Second, the improvement is most meaningful in recall: at τ=0.50, Fusion misses far fewer malicious samples than TabOnly, which is the more costly error type in many security contexts.
+Second, the improvement is most meaningful in recall: at \tau=0.50, Fusion misses far fewer malicious samples than TabOnly, which is the more costly error type in many security contexts.
 Third, explainability artifacts help justify decisions in uncertain cases; for example, the borderline benign sample shows how positive (malware-leaning) and negative (benign-leaning) signals compete near the operating threshold, which is exactly where analyst review is most valuable.
 
 \subsection{Phishing Email Detection: Implementation and Results}
@@ -699,7 +697,7 @@ These measurements matter because truncation can remove the decisive phishing re
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.10.png}
 
-    \caption{Figure 4.10.
+    \caption{%Figure 4.10.
     Token-length distribution of emails in the cleaned dataset (WordPiece tokens).}
 
     \label{fig:figure-4-10}
@@ -713,7 +711,7 @@ Frequency of long emails relative to the chosen maximum length and BERT's typica
 
 \subsubsection{Classification Results}
 
-Table 4.7 reports the test performance at the default τ=0.50 and at the best-F1 threshold selected on the validation set (τ$\approx$0.47).
+Table 4.7 reports the test performance at the default \tau=0.50 and at the best-F1 threshold selected on the validation set ($\tau \approx 0.47$).
 The classifier achieves very high performance on this dataset, with only a small number of false positives and false negatives.
 Even when overall accuracy is high, we still report confusion matrices because the cost of missing phishing (FN) is often higher than the cost of a false alarm (FP) in security operations.
 Table 4.7.
@@ -723,48 +721,48 @@ Phishing detection performance on the test set at two operating points.
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.11.png}
 
-    \caption{Figure 4.11.
-    Confusion matrix for phishing detection at τ=0.50.}
+    \caption{%Figure 4.11.
+    Confusion matrix for phishing detection at \tau=0.50.}
 
     \label{fig:figure-4-11}
 
 \end{figure}
 
 %Figure 4.11.
-Confusion matrix for phishing detection at τ=0.50.
+Confusion matrix for phishing detection at \tau=0.50.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.12.png}
 
-    \caption{Figure 4.12.
-    Confusion matrix for phishing detection at τ=0.47 (best-F1 on validation).}
+    \caption{%Figure 4.12.
+    Confusion matrix for phishing detection at \tau=0.47 (best-F1 on validation).}
 
     \label{fig:figure-4-12}
 
 \end{figure}
 
 %Figure 4.12.
-Confusion matrix for phishing detection at τ=0.47 (best-F1 on validation).
+Confusion matrix for phishing detection at \tau=0.47 (best-F1 on validation).
 
 \subsubsection{Explainability Report for Phishing: SHAP and Attention}
 
 Given that phishing is a language-based social-engineering attack, we treat explanations as an integral component of the detection pipeline rather than an optional add-on.
 For each evaluated email, the system produces two complementary explanation artifacts: (i) SHAP token-impact explanations and (ii) attention-based focus tokens.
 SHAP (Shapley Additive Explanations): Explains decision influence by assigning signed contribution values to individual tokens.
-This indicates precisely whether a specific word pushes the model's probability toward ‘Phishing' (positive contribution) or ‘Safe' (negative contribution).
+This indicates precisely whether a specific word pushes the model's probability toward `Phishing' (positive contribution) or `Safe' (negative contribution).
 Attention Mechanisms: Explain the model's internal focus by highlighting which tokens received the highest weighting during the encoding phase.
 These methods are presented in tandem because they offer distinct, complementary insights: SHAP is theoretically grounded in decision contribution (answering ``why''), while attention often produces visually intuitive highlights that align with human reading patterns (answering ``where'').
 Representative SHAP token-impact plots (main text)
 Figures 4.13--4.16 show four representative SHAP token-impact plots selected from the evaluation subset.
 These plots are interpreted as follows: tokens on the positive side increase the phishing probability, while tokens on the negative side decrease it.
-In analyst terms, the positive-side tokens are the strongest ‘evidence words' supporting the phishing decision for that email.
+In analyst terms, the positive-side tokens are the strongest `evidence words' supporting the phishing decision for that email.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.13.png}
 
-    \caption{Figure 4.13.
+    \caption{%Figure 4.13.
     SHAP token-impact plot (representative example from the evaluation subset).}
 
     \label{fig:figure-4-13}
@@ -778,7 +776,7 @@ SHAP token-impact plot (representative example from the evaluation subset).
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.14.png}
 
-    \caption{Figure 4.14.
+    \caption{%Figure 4.14.
     SHAP token-impact plot (representative example from the evaluation subset).}
 
     \label{fig:figure-4-14}
@@ -792,7 +790,7 @@ SHAP token-impact plot (representative example from the evaluation subset).
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.15.png}
 
-    \caption{Figure 4.15.
+    \caption{%Figure 4.15.
     SHAP token-impact plot (representative example from the evaluation subset).}
 
     \label{fig:figure-4-15}
@@ -806,7 +804,7 @@ SHAP token-impact plot (representative example from the evaluation subset).
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.16.png}
 
-    \caption{Figure 4.16.
+    \caption{%Figure 4.16.
     SHAP token-impact plot (representative example from the evaluation subset).}
 
     \label{fig:figure-4-16}
@@ -822,7 +820,7 @@ Table 4.8.
 SHAP vs attention comparison across the evaluated email subset (12 examples).
 Worked explanation examples (how to read the outputs)
 Example 1 (E00): The SHAP-positive tokens emphasize the actionable or urgent phrases that increase phishing probability, while the SHAP-negative tokens capture language that reduces suspicion.
-In this example, the attention tokens partially overlap with the SHAP-positive evidence but also include generic tokens, illustrating why attention should be treated as ‘focus' rather than a faithful causal explanation.
+In this example, the attention tokens partially overlap with the SHAP-positive evidence but also include generic tokens, illustrating why attention should be treated as `focus' rather than a faithful causal explanation.
 Example 2 (E04): The SHAP-positive tokens again concentrate on request/credential/action language and identity cues, which is consistent with common phishing strategies.
 When attention focuses on similar cues, it provides an intuitive highlight; when it diverges toward repeated or formatting-related tokens, SHAP remains the more decision-oriented evidence stream.
 
@@ -836,7 +834,7 @@ Stability is tested by perturbing the input slightly and measuring the overlap (
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.17.png}
 
-    \caption{Figure 4.17.
+    \caption{%Figure 4.17.
     Faithfulness (deletion test): mean probability change after removing top-k tokens.}
 
     \label{fig:figure-4-17}
@@ -850,7 +848,7 @@ Faithfulness (deletion test): mean probability change after removing top-k token
     \centering
     \includegraphics[width=0.4\textwidth]{Figures/Figure 4.18.png}
 
-    \caption{Figure 4.18.
+    \caption{%Figure 4.18.
     Stability: mean Jaccard overlap of top-k tokens under perturbations.}
 
     \label{fig:figure-4-18}
@@ -946,7 +944,7 @@ When truncation occurs, both the classifier and its explanations reflect only th
 \subsubsection{Explainability outcomes (phishing): SHAP vs attention in practice}
 
 The project intentionally produced two explanation views that answer different questions.
-Token-level SHAP~\cite{LL2017} estimates the impact of individual tokens on the prediction, supporting an evidence-oriented narrative (‘these words pushed the email toward phishing').
+Token-level SHAP~\cite{LL2017} estimates the impact of individual tokens on the prediction, supporting an evidence-oriented narrative (`these words pushed the email toward phishing').
 Attention-based explanations (see the discussion on limits of attention as explanation)~\cite{JW2019} instead show where the model concentrated its focus while processing the text.
 In the analyst setting, SHAP better supports justification, while attention can provide a stable and fast salience signal.
 To avoid relying only on visual examples, we measured explanation quality using faithfulness (deletion and insertion tests) and stability (Jaccard overlap under small perturbations).
@@ -1000,7 +998,7 @@ While this is acceptable for a project report and for illustrating method behavi
 
 Use fusion as the primary malware detector and keep TabOnly as a documented baseline.
 The fusion model consistently improved recall and F1 while retaining strong precision, and it provides richer evidence for analysts through combined IG and Grad-CAM outputs.
-Maintaining the tabular-only baseline remains valuable for ablation comparison and for faster ‘first-pass' screening when compute is constrained.
+Maintaining the tabular-only baseline remains valuable for ablation comparison and for faster `first-pass' screening when compute is constrained.
 Treat threshold selection as an explicit deployment policy.
 The report demonstrates that thresholds can shift the system from conservative blocking toward higher malware/phishing capture.
 A recommended operational pattern is to define at least two modes:\\
@@ -1046,10 +1044,10 @@ From a security perspective, the most important improvement was the reduction in
 
 The malware classifiers produce a continuous score that is converted into a binary decision using a threshold.
 Formally, for a file with predicted malware probability p(mal), the decision rule is:
-$ŷ = 1  if  p(mal) \geq \tau$,   else  $ŷ = 0$
-Results at the default threshold (τ = 0.50) represent a conservative operating point, while the threshold sweep identified a lower threshold that increased recall and yielded a more balanced F1 for the malware class.
+$\widehat{y} = 1  if  p(mal) \geq \tau$,   else  $\widehat{y} = 0$
+Results at the default threshold (\tau = 0.50) represent a conservative operating point, while the threshold sweep identified a lower threshold that increased recall and yielded a more balanced F1 for the malware class.
 This confirms that the best threshold is not universal: it depends on alert tolerance, analyst capacity, and the relative cost of false positives versus false negatives.
-In practice, the system should expose τ as a configurable parameter and document the chosen operating point for any deployment scenario.
+In practice, the system should expose \tau as a configurable parameter and document the chosen operating point for any deployment scenario.
 
 \subsubsection{Explainability artifacts improved transparency and diagnostic value}
 
