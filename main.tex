@@ -88,28 +88,29 @@ This allows the system to learn structural patterns that the pre-calculated data
 This choice reflects a practical intuition: PE files carry both statistical feature evidence (captured by engineered vectors) and structural evidence (captured by section organization), and combining both may strengthen classification while enabling richer explanations.
 To evaluate this hypothesis, we train two models: a TabOnly baseline that learns only from the aligned tabular feature vector, and a Fusion Tab+CNN model that merges a feed-forward tabular encoder with a lightweight CNN encoder over section images.
 On the held-out test split, the Fusion Tab+CNN model consistently outperformed the TabOnly baseline across both standard and tuned thresholds.
-The comparative results are summarized in Table 1.
 
-\begin{table}[htbp]
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
+% The comparative results are summarized in Table 1.
+% 
+% \begin{table}[htbp]
+% \centering
+% \small
+% \setlength{\tabcolsep}{3pt}
+% 
+% \caption{Performance comparison on EMBER2024 malware detection}
+% 
+% \begin{tabular}{lccccc}
+% 
+%     \hline
+% \textbf{Model} & \boldmath$\tau$ & \textbf{ACC} & \textbf{F1} & \textbf{ROC-AUC} \\
+% \hline
+% Tab-only LGBM (EMBERv3) & 0.50 & 0.9794 & 0.9792 & 0.9979 \\
+% Tab + ImgEmb LGBM & 0.50 & 0.9795 & 0.9793 & 0.9979 \\
+% Tuned Tab + ImgEmb LGBM & 0.35 & 0.9802 & 0.9801 & 0.9979 \\
+% \hline
+% \end{tabular}
+% \label{tab:lgbm_small}
 
-\caption{Performance comparison on EMBER2024 malware detection}
-
-\begin{tabular}{lccccc}
-
-    \hline
-\textbf{Model} & \boldmath$\tau$ & \textbf{ACC} & \textbf{F1} & \textbf{ROC-AUC} \\
-\hline
-Tab-only LGBM (EMBERv3) & 0.50 & 0.9794 & 0.9792 & 0.9979 \\
-Tab + ImgEmb LGBM & 0.50 & 0.9795 & 0.9793 & 0.9979 \\
-Tuned Tab + ImgEmb LGBM & 0.35 & 0.9802 & 0.9801 & 0.9979 \\
-\hline
-\end{tabular}
-\label{tab:lgbm_small}
-
-\end{table}
+% \end{table}
 
 
 We emphasize the tuned operating point because threshold selection is an intrinsic part of operational decision-making, while still reporting the standard threshold for transparency and comparability. Explainability is integrated in a modality-aligned manner.
