@@ -43,39 +43,37 @@ At Security Operations Center (SOCs) scale, the challenge is not only detecting 
 To handle this scale, SOCs increasingly deploy~\cite{SDRS2025} machine learning (ML) systems to automate triage and prioritize suspicious files for analyst review.
 Deep learning models are attractive in this setting because they can learn complex interactions in high-dimensional static features that rule-based filters and signature matching often miss~\cite{DSR2025ai}.
 Yet, cybersecurity operations is a high-stakes environment: model outputs often influence decisions such as quarantining endpoints, blocking execution, or escalating incidents.
-These actions require accountability and evidence.
+These actions require accountability.
 If a model behaves as a black box and only provides a label (e.g., malware/benign), analysts face a trust gap: either they accept a decision they cannot justify, or they must re-investigate alerts from scratch, which reduces the operational value of automation.
-This trust gap becomes even more critical as threats evolve and adversaries intentionally manipulate surface cues to evade detection.
+The trust gap grows as threats evolve and adversaries manipulate surface cues.
 
 \subsection{Explainable AI and Why It Matters in Cybersecurity}
 
 Explainable AI (XAI) refers to a family of methods and system designs intended to make the behavior of machine-learning models understandable to humans.
-In practical terms, XAI aims to answer questions such as:
+XAI addresses questions such as:
 Which inputs contributed most to this prediction?
 What evidence increased or decreased the model's confidence? and
 What parts of the input were most influential?
-In this work, explainability is treated as evidence generation: explanations are produced as structured artifacts that accompany predictions and support verification, reporting, and analyst reasoning.
+In this work, explainability is treated as evidence generation: explanations accompany predictions and support verification, reporting, and analyst reasoning.
 This project adopts widely used attribution-based XAI methods because they can be applied directly to trained models without redesigning the model architecture.
 For tabular feature inputs and other structured representations, additive feature attribution approaches such as SHapley Additive exPlanations (SHAP)~\cite{LL2017} provide local explanations (why one sample was classified in a certain way) and global summaries (which features are broadly important across many samples).
 For deep networks, Integrated Gradients~\cite{MAQ2017} provides principled attributions by accumulating gradients from a baseline input to the actual input, offering a model-sensitive measure of feature influence.
 For CNN-based components, Grad-CAM produces a saliency heatmap that highlights spatial regions most responsible for a prediction, enabling a visual form of evidence over image-like representations~\cite{SCDVPB2017}.
-These methods are well-established and widely reused, making them suitable for a rigorous pipeline in which both performance and interpretability are reported in a structured way.
+These methods are well-established and suitable for a pipeline that reports both performance and interpretability.
 Explainability matters in cybersecurity for three reasons.
 First, it supports trust calibration.
-A high confidence score is not automatically trustworthy; analysts need to know whether the evidence aligns with known malicious patterns and whether the model is relying on meaningful signals.
+A high confidence score alone is insufficient; analysts must verify that evidence aligns with known malicious patterns.
 Second, explainability supports investigation efficiency.
 If an alert comes with evidence such as top contributing PE features and highlighted structural regions, analysts can validate or dismiss predictions faster, which improves SOC throughput.
 Third, explainability helps reveal failure modes, including shortcut learning, spurious correlations, and inconsistent preprocessing.
-In security, these failure modes are not just academic; they can be exploited by attackers or can produce operational harm through excessive false positives.
-Because of this, explanations must be treated as outputs that require validation and careful interpretation.
+In security, these failure modes can be exploited by attackers and can increase false positives.
+Therefore, explanations must be validated and interpreted carefully.
 This is especially relevant for any saliency signal; prior work cautions that explanation outputs are not automatically faithful and must be evaluated rather than assumed~\cite{JW2019}.
 
 \subsection{Research Aim and Scope}
 
 This research aims to develop and evaluate an explainable, proposal-aligned pipeline for static malware detection from Windows PE artifacts.
-The project is designed so that the pipeline produces both
-(a) strong predictive performance and
-(b) analyst-oriented evidence describing model reasoning.
+The pipeline is designed to produce strong predictive performance and analyst-oriented evidence.
 The work focuses on static detection using the EMBER2024 PE feature set~\cite{JMGPR2024} and a section-level structural representation derived from executables.
 The scope does not include dynamic malware execution traces, malware family attribution, network intrusion detection, URL crawling, attachment sandboxing, sender reputation systems, or production SOC deployment engineering.
 
@@ -86,8 +84,8 @@ Structurally, this representation maps each Portable Executable (PE) file into a
 The dataset itself directly provides the first modality: a set of tabular descriptors that capture statistical properties of the file.
 However, tabular summaries can obscure section-level structural layout information.
 To address this, we introduce original descriptors as a second modality by rendering the executable's section layout into a compact image and processing it with a Convolutional Neural Network (CNN).
-This allows the system to learn structural patterns that the pre-calculated dataset features may miss.
-This choice reflects a practical intuition: PE files carry both statistical feature evidence (captured by engineered vectors) and structural evidence (captured by section organization), and combining both may strengthen classification while enabling richer explanations.
+This allows the system to learn structural patterns not captured by pre-calculated dataset features.
+PE files carry both statistical feature evidence (captured by engineered vectors) and structural evidence (captured by section organization), and combining both may strengthen classification while enabling richer explanations.
 To evaluate this hypothesis, we train two models: a TabOnly baseline that learns only from the aligned tabular feature vector, and a Fusion Tab+CNN model that merges a feed-forward tabular encoder with a lightweight CNN encoder over section images.
 On the held-out test split, the Fusion Tab+CNN model consistently outperformed the TabOnly baseline across both standard and tuned thresholds.
 
@@ -115,25 +113,20 @@ On the held-out test split, the Fusion Tab+CNN model consistently outperformed t
 % \end{table}
 
 
-We emphasize the tuned operating point because threshold selection is an intrinsic part of operational decision-making, while still reporting the standard threshold for transparency and comparability. Explainability is integrated in a modality-aligned manner.
+We emphasize the tuned operating point because threshold selection is operationally important, while still reporting the standard threshold for comparability. Explainability is integrated in a modality-aligned manner.
 For tabular evidence, we use Integrated Gradients to compute both global attributions (aggregated evidence trends) and local attributions for individual files~\cite{MAQ2017}.
 For the CNN branch, we use Grad-CAM~\cite{SCDVPB2017} to generate heatmaps that highlight the section-image regions that most influence the malware decision.
-During development, we identify a critical reliability issue: when training-time feature normalization is missing during inference and explainability, predicted probabilities and explanations become inconsistent.
-By regenerating and enforcing the correct normalization statistics aligned to the enforced feature dimension, we restore probability fidelity and ensure attributions are computed on the same scale as training, which is necessary for meaningful comparison across cases.
+During development, we found a reliability issue: missing training-time normalization during inference and explainability caused inconsistent probabilities and explanations.
+By regenerating and enforcing normalization statistics aligned to the feature dimension, we restored probability fidelity and kept attributions on the same scale as training.
 
 \subsection{Contributions}
 
 The main contributions are:
 %
 \begin{itemize}
-\item 
-An explainable multimodal static malware detection pipeline using EMBER2024 PE features, including a TabOnly baseline and a Tab+CNN fusion model evaluated under both standard and tuned thresholds~\cite{JMGPR2024}.
-
-\item 
-A multimodal explanation strategy for malware analysis, combining Integrated Gradients for tabular attributions and Grad-CAM for section-image localization~\cite{SCDVPB2017,MAQ2017}.
-
-\item 
-Reliability-focused implementation findings, including strict normalization alignment and feature-schema consistency for stable malware explanations.
+\item An explainable multimodal static malware detection pipeline using EMBER2024 PE features, including a TabOnly baseline and a Tab+CNN fusion model evaluated under both standard and tuned thresholds~\cite{JMGPR2024}.
+\item A multimodal explanation strategy for malware analysis, combining Integrated Gradients for tabular attributions and Grad-CAM for section-image localization~\cite{SCDVPB2017,MAQ2017}.
+\item Reliability-focused implementation findings, including strict normalization alignment and feature-schema consistency for stable malware explanations.
 \end{itemize}
 
 \section{Related Work}
@@ -141,11 +134,11 @@ Reliability-focused implementation findings, including strict normalization alig
 
 Static malware detection sits at the front line~\cite{KBSSSK2025} of Security Operations Center (SOC) triage because it can be executed quickly, safely, and at scale, often before deeper investigation is feasible~\cite{GPH2024}.
 For Windows endpoints, a large share of malicious delivery still arrives as Portable Executable (PE) files~\cite{opentext2025} distributed through downloads~\cite{recordedfuture2025malware}, attachments, and staged droppers.
-The operational constraint is clear: defenders must filter high-volume file streams with limited analyst time, and the cost of errors is real.
-This is where the ``trust gap'' of modern machine learning becomes visible.
+Defenders must filter high-volume file streams with limited analyst time, and errors are costly.
+This highlights the ML ``trust gap.''
 Deep models can achieve strong predictive metrics, but SOC decisions still require justification~\cite{NSDSP2025}: why a file was quarantined and what evidence supports that action.
 Explainable AI (XAI) addresses this gap by producing interpretable signals (feature attributions and saliency maps) that connect model outputs to concrete input evidence.
-In cybersecurity, this evidence is not merely descriptive---it supports analyst validation, accelerates investigation, and reduces the risk of deploying opaque automation in high-stakes workflows.
+In cybersecurity, this evidence supports analyst validation, accelerates investigation, and reduces reliance on opaque automation.
 For this reason, this research treats explainability as a first-class system output and evaluates XAI behavior as part of the overall malware detection pipeline~\cite{SCDVPB2017,LL2017}.
 
 \subsection{Static Malware Detection}
@@ -216,15 +209,15 @@ This supports the methodological choice to treat explanation generation and vali
 
 The malware literature shows a consistent trajectory: high-performing models increasingly rely on deep learning and richer representations, but operational adoption in cybersecurity still requires transparent evidence and explanation reliability.
 EMBER-style PE feature benchmarks and multimodal fusion trends motivate our TabOnly baseline and Tab+CNN fusion design, while Grad-CAM and IG provide explanation modalities aligned to each input stream~\cite{JMGPR2024,SZS25,SCDVPB2017,MAQ2017,HP20182018,NKJMB2011}.
-This section establishes the research foundation for our implementation choices: controlled, scalable representations; fusion for complementary evidence; and explanations treated as measurable outputs that support analyst-oriented interpretation rather than black-box automation~\cite{JMGPR2024,SZS25,SCDVPB2017,MAQ2017,JJMIMB2018}.
+This section motivates controlled and scalable representations, multimodal fusion, and measurable explanation outputs~\cite{JMGPR2024,SZS25,SCDVPB2017,MAQ2017,JJMIMB2018}.
 
 
 \section{Methodology}
 \label{section:methodology}
 
 This paper proposes and evaluates an Explainable AI (XAI) framework for static malware detection from Portable Executable (PE) artifacts.
-The methodological design reflects common Security Operations Center (SOC) requirements where automated detection must operate under high volume and time constraints, while still producing evidence that supports analyst validation and reporting.
-In this context, the project treats explainability as a core system output rather than a post-hoc visualization, because security decisions often require justification and traceability.
+The methodology reflects SOC requirements: high-volume detection under time constraints, with evidence for analyst validation and reporting.
+The project treats explainability as a core output, not a post-hoc visualization, because security decisions require justification and traceability.
 The methodology emphasizes scalability and multimodal evidence, using large-scale PE feature vectors and section-derived structural representations to study whether complementary static views improve robustness.
 Evaluation is conducted under a consistent protocol and includes probability threshold analysis to reflect deployment-style trade-offs in security settings.
 
@@ -278,48 +271,31 @@ This selection is formalized as:
 The purpose of this step is not to ``inflate'' metrics but to reflect how SOC deployments often require tuned decision boundaries depending on tolerance for false positives versus missed detections.
 The methodology therefore preserves transparency by reporting both the default threshold and the best-F1 threshold.
 
-\subsubsection{Explainability Methods (Malware Branch)}
+\subsubsection{Explainability Methods}
 
-The malware branch integrates explainability as an explicit pipeline stage so that each prediction can be accompanied by interpretable evidence.
-The approach uses Integrated Gradients for tabular attribution and Grad-CAM for CNN-based spatial localization, which are widely used explanation methods aligned to differentiable networks and convolutional representations~\cite{SCDVPB2017,MAQ2017}.
-Integrated Gradients for tabular feature attribution
-Integrated Gradients (IG) attributes a model score to individual input features by integrating gradients along a path from a baseline to the input~\cite{MAQ2017}.
-For feature, the IG attribution is:
-In this project, IG is operationalized in two modes.
+
+We use Integrated Gradients (IG)~\cite{MAQ2017} for tabular attribution and Grad-CAM~\cite{SCDVPB2017} for CNN-based spatial localization.
+Integrated Gradients attributes a model score to individual input features by integrating gradients along a path from a baseline to the input in two modes.
 First, global explanations are obtained by aggregating mean absolute attributions across a background subset of samples, producing a stable summary of which PE features consistently influence predictions.
 Second, local explanations are produced for selected test samples, yielding ranked feature evidence suitable for analyst-style review.
-Grad-CAM for CNN branch localization
-Grad-CAM produces a class-discriminative heatmap over a convolutional representation by weighting activation maps using the gradients of the target score~\cite{SCDVPB2017}.
-Given feature maps, Grad-CAM computes weights and forms a heatmap:
+Grad-CAM produces a class-discriminative heatmap over a convolutional representation by weighting activation maps using the gradients of the target score.
 The resulting saliency map highlights which spatial regions in the section-derived representation contribute most strongly to the malware decision.
 In the fusion setting, Grad-CAM complements IG by providing structural evidence tied to the CNN pathway.
 
-\subsubsection{Implementation and Reproducibility Workflow}
-
-To ensure the experiments are repeatable and auditable, the malware pipeline follows a structured execution workflow.
-First, the dataset is loaded in a sharded manner to support large-scale iteration without exhausting memory, and feature dimensionality is strictly aligned to the trained model configuration.
-Second, training-derived normalization statistics are computed once and reused consistently for all downstream stages, including test evaluation and gradient-based explanations.
-Third, the trained model states are saved at convergence and reused for evaluation and explainability generation, ensuring that reported metrics and explanations are derived from the same model parameters.
-Finally, the pipeline produces traceable outputs that link each evaluated sample (or chosen analysis subset) to its predicted probability and explanation artifacts, enabling verification and report assembly without requiring ad-hoc recomputation.
-This workflow is especially important in XAI settings because explanation methods can be sensitive to model state, preprocessing, and numerical scale.
-By keeping the preprocessing statistics and inference configuration consistent across evaluation and explanation stages, the project preserves fidelity between model behavior and explanation outputs.
 
 \section{Implementation and Results}
 \label{section:implementation-and-results}
 
 
-\subsection{Malware Detection: Implementation and Results}
-\subsubsection{System Implementation Overview}
-
-For malware detection, we implemented two deep-learning classifiers operating on engineered static PE feature representations.
+We implemented two deep-learning classifiers operating on engineered static PE feature representations.
 The baseline model (TabOnly) consumes a fixed-length numeric feature vector and outputs a malware probability.
 The main model (Fusion Tab+CNN) augments the same tabular evidence with a second modality: a compact section-structure representation processed by a CNN, followed by feature fusion and a final decision head.
 The design goal is practical: keep inference scalable for millions of files while producing analyst-facing evidence rather than a single opaque score.
 
 \subsubsection{Decision Rule, Threshold Sweep, and Reported Metrics}
 
-For each test sample i, the model outputs a malware probability $p\_i = p(y=1 | x\_i)$.
-Given a decision threshold $\tau$, the predicted label is $\widehat{y}\_i(\tau)=1$ if $p\_i \geq \tau$ and 0 otherwise.
+For each test sample $i$, the model outputs a malware probability $p_i = p(y=1 \mid x_i)$.
+Given a decision threshold $\tau$, the predicted label is $\widehat{y}_i(\tau)=1$ if $p_i \geq \tau$ and 0 otherwise.
 From the resulting confusion matrix counts, we compute Accuracy, Precision (malicious), Recall (malicious), and F1 (malicious).
 Because operational malware detection often requires balancing false negatives (missed malware) against false positives (benign files escalated), we report results at the conventional $\tau=0.50$ and also report the best-F1 operating point identified by sweeping $\tau$ over multiple values.
 
@@ -489,131 +465,29 @@ First, Fusion Tab+CNN consistently outperforms the tabular baseline, indicating 
 Second, the improvement is most meaningful in recall: at $\tau=0.50$, Fusion misses far fewer malicious samples than TabOnly, which is the more costly error type in many security contexts.
 Third, explainability artifacts help justify decisions in uncertain cases; for example, the borderline benign sample shows how positive (malware-leaning) and negative (benign-leaning) signals compete near the operating threshold, which is exactly where analyst review is most valuable.
 
-\section{Discussion}
-\label{section:Discussion-and-limitations}
-
-This section interprets the implementation outcomes and empirical results, analyzing their broader implications for explainable cybersecurity threat detection.
-The discussion is organized around three primary analytical dimensions:
-Multimodal Improvement Analysis: An examination of why the multimodal malware fusion model outperformed the tabular baseline, focusing on the specific contributions of the structural view versus the engineered features.
-Limitations and Scope: A critical assessment of the specific limitations that define the boundary of the claims in this report, ensuring the validity of the findings is properly scoped.
-Where relevant, this section also provides evidence-based recommendations for operation and future extension.
-
-\subsection{Key Findings}
-\subsubsection{Malware detection: key outcomes and why they matter}
-
-In the malware component, we implemented two PE-based classifiers on the sharded EMBER2024 feature format: a tabular-only baseline (TabOnly, 515-dimensional after ablation) and a multimodal fusion model that combines the same tabular vector with a CNN representation of section-structure images (Fusion Tab+CNN).
-Both models output a probability score for the malicious class and a binary decision derived from a configurable threshold.
-The design goal was not only high accuracy but also explainability Integrated Gradients (IG)~\cite{MAQ2017} was used to attribute the tabular contribution, and Grad-CAM~\cite{SCDVPB2017} was used to localize the CNN evidence on the section-image representation.
-The evaluation results show a consistent advantage for multimodal fusion.
-At the standard 0.50 decision threshold, the tabular baseline achieved an accuracy of 0.9123 with malicious-class F1 of 0.9081 and malicious recall of 0.8666.
-The fusion model improved the same operating point to 0.9406 accuracy, 0.9392 malicious F1, and 0.9179 malicious recall.
-In operational terms, the most important improvement is the reduction in false negatives: the fusion model missed substantially fewer malicious files than the tabular-only model at the default threshold.
-In many cybersecurity settings, this is a high-impact gain, because a single missed malware sample can translate into downstream compromise risk, whereas a small increase in false positives can often be managed through triage policies.
-
-\subsubsection{Why multimodal fusion improved malware detection}
-
-The performance gap between TabOnly and Fusion is consistent with the idea that tabular PE features and section-structure representations encode complementary evidence.
-The tabular vector summarizes file properties as engineered statistics (e.g., byte-level distributions and other numeric descriptors).
-This representation is compact and highly informative, but it is also vulnerable to feature ambiguity: different malware families can share similar statistics, and sophisticated packing or obfuscation strategies can reduce the separability of purely engineered features.
-By contrast, the section-image branch encodes a different view of the binary structural layout and relative patterns derived from section information.
-Even when a malware sample manipulates some global statistics, structural cues can remain informative (for example, abnormal section composition or atypical patterns in the section-derived representation).
-Fusion effectively behaves like an analyst combining multiple kinds of evidence: a numerical profile plus a structural profile.
-This reduces over-reliance on any single feature group and tends to improve recall in heterogeneous malware collections.
-
-\subsubsection{Threshold behavior and deployment interpretation (malware)}
-
-A notable observation from the threshold sweep is that both models achieved their best malicious F1 at a lower threshold (0.35) than the default 0.50.
-For the fusion model, the best scanned point (0.35) reached 0.9420 accuracy with malicious precision of 0.9432, recall of 0.9406, and F1 of 0.9419.
-This confirms that the probability outputs are sufficiently calibrated for policy-driven tuning: by lowering the threshold, the system increases malware capture (recall) at the cost of higher false positives.
-Importantly, threshold selection is not only a technical choice; it is a risk-management policy.
-In a high security environment, a lower threshold may be justified to reduce missed malware, provided that the organization can handle additional triage.
-In environments with limited analyst capacity, a higher threshold may be preferable to reduce alert volume.
-The results in this report demonstrate that the fusion model supports this operational flexibility by offering a strong baseline at 0.50 and an improved balanced point at 0.35.
-
-\subsubsection{Explainability contribution (malware): what IG and Grad-CAM add}
-
-The explainability pipeline materially strengthens the malware component beyond raw metrics.
-IG provides directional attributions on the tabular features, which can be interpreted as evidence that pushes the model toward malicious or benign predictions.
-Grad-CAM, applied to the CNN branch, produces spatial localization maps on the section-image representation, showing where the fusion model concentrated its structural evidence.
-From a security workflow perspective, this pairing creates a two-view explanation: (i) which engineered features mattered most and whether they supported or suppressed the malicious decision (IG), and (ii) which structural regions the CNN considered influential (Grad-CAM).
-This is particularly valuable in borderline or error cases (e.g., low-confidence malware or near-threshold benign samples), because the explanations offer a rationale that can inform whether an analyst should quarantine, block, or escalate the file for deeper analysis.
-
-\subsection{Limitations}
-\subsubsection{Malware detection limitations}
-
-Dataset and labeling constraints.
-Static malware datasets often reflect labeling derived from antivirus consensus or detection heuristics rather than ground-truth behavioral verification.
-This introduces label noise risk, especially for borderline samples (potentially unwanted programs, grayware, or newly emerging families).
-As a result, performance metrics should be interpreted as effectiveness on the dataset's labeling standard rather than as an absolute guarantee of real-world correctness.
-Generalization and temporal drift.
-Malware evolves rapidly, and a model trained on a fixed historical distribution can degrade when deployed against new packing techniques, novel families, or shifting ecosystem trends.
-The reported test results are strong within the prepared split, but external validation on more recent or geographically distinct corpora would be required to claim robust long-term generalization.
-Feature schema sensitivity (516 $\rightarrow$ 515 ablation).
-The final evaluated checkpoints used a 515-dimensional input, while the raw shards were 516-dimensional.
-This introduced implementation complexity and makes the pipeline sensitive to feature schema changes.
-Although the project resolved this through consistent dimension forcing and matching normalization statistics, it highlights the need for strict feature versioning and careful checkpoint--schema alignment in any future extension.
-Explainability constraints (IG and Grad-CAM).
-IG attributions depend on the choice of baseline and background distribution and may vary across these choices.
-Grad-CAM provides localization of CNN influence but does not prove causality; it highlights correlated regions that influence activations, and results can depend on the chosen layer and upscaling method.
-Therefore, both explanation types should be treated as supportive evidence for analyst triage, not as definitive proof of maliciousness.
-Evaluation scope.
-The current evaluation focused on accuracy, precision, recall, F1, and threshold sweeps.
-In operational environments, additional diagnostics may be important, including PR-AUC/ROC-AUC, probability calibration, per-family performance breakdowns, robustness against packing/obfuscation, and concept-drift monitoring.
-These were outside the immediate implementation scope but are relevant for deployment-grade assessment.
-
-\subsection{Lessons learned and practical recommendations}
-
-\begin{itemize}
-\item \textbf{Use fusion as the primary detector.} The fusion model consistently improved recall and F1 while retaining strong precision, and it provides richer evidence through combined IG and Grad-CAM outputs.
-\item \textbf{Retain TabOnly as a baseline.} The tabular-only model remains useful for ablation comparison and for faster first-pass screening when compute is constrained.
-\item \textbf{Treat thresholding as policy.} Threshold choice can shift behavior from conservative blocking toward higher malware capture. In practice, define at least two operating modes: (i) conservative mode for low-noise environments and (ii) high-recall mode for high-security or quarantine/review workflows.
-\item \textbf{Improve semantic interpretability.} Mapping feature indices to descriptive PE semantics and standardizing explanation-card layouts can improve analyst comprehension and evidence usability.
-\end{itemize}
-
-\subsection{Discussion Summary}
-
-Overall, the malware results support the central claim that multimodal fusion (tabular PE features plus structural section representation) improves detection quality over a tabular-only baseline, primarily by reducing missed malware while maintaining strong precision.
-At the same time, the pipeline has practical limitations---including dataset representativeness, generalization drift, feature-schema sensitivity, and method-specific explainability constraints---that define what can be confidently claimed and motivate the next engineering and research steps.
-
-
 \section{Conclusion and Future Work}
 \label{section:conclusion-and-futurework}
 
-\subsection{Conclusion}
+This paper presents an explainable static malware detection pipeline that combines tabular EMBER2024 features with section-structure image representations.
+Across experiments, the Fusion Tab+CNN model outperformed the tabular-only baseline, with the most important operational gain being lower false negatives.
+At the default threshold (0.50), the fusion model achieved Accuracy = 0.9406, malware Precision = 0.9597, malware Recall = 0.9179, and malware F1 = 0.9392.
+Threshold tuning further showed that performance can be adjusted to deployment needs; the best scanned operating point at 0.35 improved recall while preserving strong precision.
+These results support treating threshold selection as an explicit policy choice rather than a fixed default.
 
-This paper demonstrates that explainable AI can be operationally meaningful for cybersecurity threat detection when detection performance, threshold calibration, and evidence-oriented explanations are developed together.
-The multimodal fusion model improved detection and reduced missed malware while producing interpretable evidence through feature attributions and structural localization.
-Operationally, the results show that threshold selection must be treated as a deployment policy rather than a fixed default, and that strict preprocessing/feature-schema alignment is essential for reproducible XAI outputs.
+The explainability layer improved interpretability of model behavior.
+Integrated Gradients provided directional feature attributions for the tabular branch, and Grad-CAM provided structural localization for the CNN branch.
+Together, these outputs offered complementary evidence for analyst triage, especially in borderline cases.
+A key implementation finding was that strict preprocessing and feature-schema alignment are required for stable probabilities and reproducible explanations.
 
-\subsection{Future Work}
+The results should be interpreted within clear boundaries.
+The evaluation used a prepared split and static labels, so external validity under evolving malware distributions remains an open question.
+The 516-to-515 feature-schema adjustment also highlighted sensitivity to dataset/version mismatches in practical pipelines.
+In addition, attribution outputs should be treated as supporting evidence, not causal proof.
 
-The future work listed below is intentionally constrained to extensions that follow directly from the implemented pipelines and the observed limitations.
-The aim is to improve interpretability depth, robustness to distribution shift, and deployment readiness without changing the project's core direction.
+Future work should prioritize deployment-oriented extensions: (i) richer semantic mapping of tabular features and broader evaluation (calibration, precision--recall analysis, and time-split/family-level tests), (ii) standardized analyst evidence cards combining score, decision, top IG attributions, and Grad-CAM, and (iii) monitoring/governance for performance drift, explanation drift, dataset versions, feature schemas, and threshold settings.
 
-\subsubsection{Deepen semantic interpretability and robustness}
-
-First, the tabular feature space should be mapped to richer semantic names so that attribution reports can be interpreted beyond index-based identifiers.
-Second, evaluation should be expanded to include probability calibration, precision--recall AUC, and per-family or time-split testing to better quantify concept drift and generalization to new malware.
-Finally, the multimodal model can be stress-tested with controlled ablations (tabular-only, image-only, fusion) and alternative fusion mechanisms to strengthen claims about which modality contributes most under different malware behaviors.
-
-\subsubsection{Integrate explanations into an analyst-ready evidence card}
-
-An immediate practical extension is to generate a unified analyst evidence card for each inspected executable.
-This card would consolidate the predicted probability, the thresholded decision, top positive and negative feature attributions (Integrated Gradients), and the corresponding structural localization (Grad-CAM) into one consistent format.
-A standardized card would improve usability for triage and facilitate case-based audit trails.
-
-\subsubsection{System-level future work: monitoring and governance}
-
-The system would also benefit from monitoring mechanisms that detect performance drift and explanation drift over time.
-In cybersecurity deployments, adversary behavior evolves rapidly; therefore, regular re-evaluation and documented model updates are required.
-A lightweight governance layer---tracking dataset versions, feature schemas, threshold settings, and explanation outputs---would make the overall system more trustworthy and maintainable.
-
-\subsection{Closing Remarks}
-
-The proposed future work focuses on strengthening robustness, improving interpretability depth, and translating explanation artifacts into consistent analyst-ready outputs suitable for practical adoption.
-
-\section*{Acknowledgment}
-The authors thank the Kyoto College of Graduate Studies for Informatics for providing access to computing facilities in support of this research.
+% \section*{Acknowledgment}
+% The authors thank the Kyoto College of Graduate Studies for Informatics for providing access to computing facilities in support of this research.
 
 \bibliographystyle{IEEEtran}
 
