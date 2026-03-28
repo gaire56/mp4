@@ -25,7 +25,7 @@ Security Operations Centers (SOCs) increasingly rely on machine learning to tria
 This paper presents an Explainable AI (XAI) pipeline for static malware detection from Windows Portable Executable (PE) files that combines strong classification performance with analyst-oriented evidence.
 The method uses EMBER2024-derived tabular PE features and section-level structural representations rendered as compact ``section images,'' then fuses both modalities for malware/benign classification.
 On the held-out full test set (N=960,000), the Tab+ImgEmb LightGBM fusion model achieves ROC-AUC = 0.99795. At the default threshold ($\tau=0.50$), it reaches Accuracy = 0.9795, Precision = 0.9875, Recall = 0.9713, and F1 = 0.9793. At the best-F1 operating point from a 500-threshold sweep ($\tau=0.353$), performance improves to Accuracy = 0.9802, Precision = 0.9829, Recall = 0.9774, and F1 = 0.9801.
-To improve decision transparency, the pipeline integrates SHAP for global and per-file explanation of the final LightGBM late-fusion classifier and Grad-CAM for structural evidence from the CNN-based section model, summarized compactly to fit publication constraints.
+To improve decision transparency, the pipeline integrates SHAP for explanation of the final LightGBM late-fusion classifier and Grad-CAM for structural evidence from the CNN-based section model, summarized compactly to fit publication constraints.
 Results are reported under default and tuned operating thresholds to reflect precision--recall trade-offs relevant to deployment.
 Overall, the study shows that high-performing static malware detection can be paired with interpretable evidence artifacts---model scores, ROC-based operating-point analysis, and ranked feature evidence---that support defensible SOC triage.
 \end{abstract}
@@ -51,7 +51,7 @@ The trust gap grows as threats evolve and adversaries manipulate surface cues.
 
 In this work, explainability is treated as evidence generation: model predictions are accompanied by feature-level and structural evidence that supports analyst verification, reporting, and triage.
 This is especially important in cybersecurity, where high-confidence predictions alone are often insufficient for operational decisions such as escalation, quarantine, or blocking.
-For the implemented pipeline, SHAP is used to explain the final LightGBM late-fusion classifier, while Grad-CAM provides complementary structural evidence for the CNN-based section model~\cite{LL2017,SCDVPB2017}.
+For the implemented pipeline, SHAP is used to explain the final LightGBM late-fusion classifier, while Grad-CAM provides complementary structural evidence for the CNN image branch of the trained section model~\cite{LL2017,SCDVPB2017}.
 Together, these methods help analysts inspect both \emph{which fused features mattered} and \emph{which structural regions were emphasized}.
 Because explanation outputs are not automatically faithful, they must be interpreted carefully and supported by consistent preprocessing and evaluation design~\cite{JW2019}.
 
@@ -94,10 +94,10 @@ Accordingly, we compare a Tab-only baseline with a Tab+ImgEmb late-fusion model 
 
 
 We emphasize the tuned operating point because threshold selection is operationally important, while still reporting the standard threshold for comparability. Explainability is integrated in a modality-aligned manner.
-For the final Tab+ImgEmb LightGBM classifier, we use SHAP to generate explanation evidence over the fused feature vector, including global feature rankings and SHAP-based per-sample feature attribution capability~\cite{LL2017}.
-For the image pathway, we use Grad-CAM~\cite{SCDVPB2017} on the CNN-based section model to generate heatmaps that highlight structurally salient regions in the section-image representation.
-During development, we found a reliability issue: missing training-time preprocessing consistency during inference and explainability caused inconsistent probabilities and explanations.
-By regenerating and enforcing preprocessing alignment, we restored probability fidelity and kept explanation outputs consistent with the trained pipeline.
+For the final Tab+ImgEmb LightGBM classifier, we use SHAP to generate explanation evidence over the fused feature vector, focusing on global feature rankings derived from the trained tree-based model~\cite{LL2017}.
+For the image pathway, we use Grad-CAM~\cite{SCDVPB2017} on the CNN image branch of the trained section model to generate heatmaps that highlight structurally salient regions in the section-image representation.
+In the final code-backed pipeline, explanation reliability depends on keeping feature layouts, exported embeddings, and model artifacts aligned across inference and analysis.
+We therefore enforce artifact consistency so that reported probabilities and explanation outputs remain tied to the same trained pipeline.
 
 \subsection{Contributions}
 
@@ -176,11 +176,9 @@ By comparing tabular-only baselines against fusion architectures, recent studies
 As explainable AI becomes increasingly important in malware detection~\cite{KBSSSK2025,NSDSP2025}, explanation methods must be matched to the actual model architecture used at inference time.
 In the implemented pipeline, the final malware decision is produced by a LightGBM late-fusion classifier rather than an end-to-end neural network.
 Accordingly, additive feature attribution methods such as SHAP are better aligned with the final classifier because they quantify how each fused feature contributes to the model score~\cite{LL2017}.
-For malware detection, this produces ranked feature evidence that can be summarized into analyst-readable tables at both global and per-sample levels.
-
+For malware detection, this produces ranked feature evidence that can be summarized into analyst-readable global tables, with the current implementation centered on global SHAP summaries.
 For CNN-based components, Grad-CAM produces class-discriminative heatmaps that highlight which spatial regions in an image-like input most strongly influenced the network response~\cite{SCDVPB2017}.
-For section-image encodings, this provides a useful ``where the model looked'' signal over the structural representation.
-However, in the implemented pipeline, Grad-CAM is applied to the CNN-based section model used to produce image-side evidence, while SHAP is used to explain the final LightGBM classifier.
+However, in the implemented pipeline, Grad-CAM is applied to the CNN image branch of the trained section model used to produce image-side evidence, while SHAP is used to explain the final LightGBM classifier.
 This distinction is important because it separates explanation of the final decision from supporting structural evidence in the image pathway.
 
 A critical point in XAI literature~\cite{DJRLXSWB2020,NSDSP2025} especially relevant to security is that explanation outputs must be reliable, not merely visually appealing.
@@ -225,11 +223,11 @@ To evaluate the benefit of multimodal evidence while retaining interpretability,
 The Tab-only baseline operates on the EMBERv3 tabular feature vector and predicts the malware probability directly from the fixed-length PE representation.
 This baseline quantifies how much discriminative power is available from the engineered static PE features alone.
 
-The Tab+ImgEmb late-fusion model combines two sources of evidence: the EMBERv3 tabular feature vector and an exported image embedding derived from a CNN-based section model operating on section-structure representations.
+The Tab+ImgEmb late-fusion model combines two sources of evidence: the EMBERv3 tabular feature vector and an exported 128-dimensional image embedding derived from the CNN image branch of a trained section model operating on section-structure representations.
 For each sample, the tabular feature vector is concatenated with the image embedding to form a fused feature vector, which is then passed to a LightGBM classifier to produce the final malware probability.
 In the released pipeline, the tabular vector has dimensionality 2568, the image embedding has dimensionality 128, and the resulting late-fusion vector has dimensionality 2696.
-This design preserves the complementary strengths of the two modalities: tabular PE features capture global structural and statistical signals, while the CNN-based section model captures structural patterns that are summarized into the image embedding.
-Importantly for this research, the explainability pipeline is aligned to this implementation: SHAP explains the final LightGBM decision, while Grad-CAM provides complementary structural evidence from the CNN-based section model~\cite{LL2017,SCDVPB2017}.
+This design preserves the complementary strengths of the two modalities: tabular PE features capture global structural and statistical signals, while the section model captures structural patterns that are summarized into the exported image embedding.
+Importantly for this research, the explainability pipeline is aligned to this implementation: SHAP explains the final LightGBM decision, while Grad-CAM provides complementary structural evidence from the CNN image branch of the trained section model~\cite{LL2017,SCDVPB2017}.
 
 \subsubsection{Evaluation Protocol and Operational Thresholding}
 
@@ -239,16 +237,16 @@ Reporting both operating points reflects deployment-style trade-offs between mis
 
 \subsubsection{Explainability Methods}
 
-We use two explanation methods aligned with the implemented malware pipeline: SHAP for the final LightGBM late-fusion classifier and Grad-CAM for the CNN-based section model~\cite{LL2017,SCDVPB2017}.
+We use two explanation methods aligned with the implemented malware pipeline: SHAP for the final LightGBM late-fusion classifier and Grad-CAM for the CNN image branch of the trained section model~\cite{LL2017,SCDVPB2017}.
 
 For the final classifier, the input to LightGBM is a late-fusion vector formed by concatenating the EMBER tabular feature vector with the exported image embedding from the section model.
 SHAP is applied directly to this trained tree-based model to measure how each fused feature dimension contributes to the malware score.
 Global explanations are produced by computing mean absolute SHAP values over an explained sample subset, yielding a ranked summary of the most influential fused features.
-The implementation supports SHAP-based explanation of the final classifier and saves global summary artifacts, while the same SHAP framework can also be used for per-sample analyst review.
+The current implementation saves global SHAP summary artifacts for the final classifier.
 
 Grad-CAM is not applied to the final LightGBM classifier itself.
 Instead, it is applied to the CNN image pathway within the trained section model used to generate image-side evidence.
-This produces a class-discriminative heatmap over the section-image representation, highlighting which structural regions were emphasized by the CNN pathway.
+This produces structural heatmaps over the compact section-image representation, highlighting the regions that most strongly influence the CNN response.
 In this way, SHAP explains the final late-fusion decision, while Grad-CAM provides complementary structural evidence from the image side of the system.
 
 
@@ -256,7 +254,7 @@ In this way, SHAP explains the final late-fusion decision, while Grad-CAM provid
 \label{section:implementation-and-results}
 
 
-We evaluated two malware detection models: a Tab-only LightGBM baseline and a Tab+ImgEmb LightGBM late-fusion model that augments the same tabular evidence with an image embedding exported from a CNN-based section model.
+We evaluated two malware detection models: a Tab-only LightGBM baseline and a Tab+ImgEmb LightGBM late-fusion model that augments the same tabular evidence with an image embedding exported from the CNN image branch of a trained section model.
 The design goal is practical: scalable inference for large volumes of files with analyst-facing evidence rather than a single opaque score.
 
 \subsubsection{Decision Rule, Threshold Sweep, and Reported Metrics}
@@ -395,7 +393,7 @@ At the best-F1 operating point from the 500-threshold sweep ($\tau=0.353$), perf
 These results support treating threshold selection as an explicit deployment policy choice rather than a fixed default.
 
 The explainability layer improved interpretability of model behavior.
-SHAP explained the final LightGBM late-fusion classifier, while Grad-CAM provided complementary structural evidence from the CNN-based section model.
+SHAP explained the final LightGBM late-fusion classifier, while Grad-CAM provided complementary structural evidence from the CNN image branch of the trained section model.
 To fit publication constraints, explanation outputs are summarized compactly rather than shown through multiple heatmaps.
 
 The results should be interpreted within clear boundaries.
