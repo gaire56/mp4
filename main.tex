@@ -49,26 +49,11 @@ The trust gap grows as threats evolve and adversaries manipulate surface cues.
 
 \subsection{Explainable AI and Why It Matters in Cybersecurity}
 
-Explainable AI (XAI) refers to a family of methods and system designs intended to make the behavior of machine-learning models understandable to humans.
-XAI addresses questions such as:
-Which inputs contributed most to this prediction?
-What evidence increased or decreased the model's confidence? and
-What parts of the input were most influential?
-In this work, explainability is treated as evidence generation: explanations accompany predictions and support verification, reporting, and analyst reasoning.
-This project adopts widely used attribution-based XAI methods because they can be applied directly to trained models without redesigning the model architecture.
-For tabular feature inputs and other structured representations, additive feature attribution approaches such as SHapley Additive exPlanations (SHAP)~\cite{LL2017} provide local explanations (why one sample was classified in a certain way) and global summaries (which features are broadly important across many samples).
-For tree-based and fused tabular representations, SHAP~\cite{LL2017} provides additive feature attributions that are well aligned with the final classifier used in this work, while Grad-CAM remains appropriate for CNN-based image pathways~\cite{SCDVPB2017}.
-For CNN-based components, Grad-CAM produces a saliency heatmap that highlights spatial regions most responsible for a prediction, enabling a visual form of evidence over image-like representations~\cite{SCDVPB2017}.
-These methods are well-established and suitable for a pipeline that reports both performance and interpretability.
-Explainability matters in cybersecurity for three reasons.
-First, it supports trust calibration.
-A high confidence score alone is insufficient; analysts must verify that evidence aligns with known malicious patterns.
-Second, explainability supports investigation efficiency.
-If an alert comes with evidence such as top contributing PE features and highlighted structural regions, analysts can validate or dismiss predictions faster, which improves SOC throughput.
-Third, explainability helps reveal failure modes, including shortcut learning, spurious correlations, and inconsistent preprocessing.
-In security, these failure modes can be exploited by attackers and can increase false positives.
-Therefore, explanations must be validated and interpreted carefully.
-This is especially relevant for any saliency signal; prior work cautions that explanation outputs are not automatically faithful and must be evaluated rather than assumed~\cite{JW2019}.
+In this work, explainability is treated as evidence generation: model predictions are accompanied by feature-level and structural evidence that supports analyst verification, reporting, and triage.
+This is especially important in cybersecurity, where high-confidence predictions alone are often insufficient for operational decisions such as escalation, quarantine, or blocking.
+For the implemented pipeline, SHAP is used to explain the final LightGBM late-fusion classifier, while Grad-CAM provides complementary structural evidence for the CNN-based section model~\cite{LL2017,SCDVPB2017}.
+Together, these methods help analysts inspect both \emph{which fused features mattered} and \emph{which structural regions were emphasized}.
+Because explanation outputs are not automatically faithful, they must be interpreted carefully and supported by consistent preprocessing and evaluation design~\cite{JW2019}.
 
 \subsection{Research Aim and Scope}
 
@@ -79,15 +64,10 @@ The scope does not include dynamic malware execution traces, malware family attr
 
 \subsection{Malware Detection Branch: Design and Motivation}
 
-The malware branch investigates explainable static malware detection using the EMBER2024 PE feature representation~\cite{JMGPR2024}.
-Structurally, this representation maps each Portable Executable (PE) file into a fixed-dimensional vector of engineered features, summarizing byte-level statistics, header metadata, and import-related information.
-The dataset itself directly provides the first modality: a set of tabular descriptors that capture statistical properties of the file.
-However, tabular summaries can obscure section-level structural layout information.
-To address this, we introduce original descriptors as a second modality by rendering the executable's section layout into a compact image and processing it with a Convolutional Neural Network (CNN).
-This allows the system to learn structural patterns not captured by pre-calculated dataset features.
-PE files carry both statistical feature evidence (captured by engineered vectors) and structural evidence (captured by section organization), and combining both may strengthen classification while enabling richer explanations.
-To evaluate this hypothesis, we train two models: a Tab-only baseline that learns only from the aligned tabular feature vector, and a Tab+ImgEmb model model that merges a feed-forward tabular encoder with a lightweight CNN encoder over section images.
-On the held-out test split, the Tab+ImgEmb model model consistently outperformed the Tab-only baseline across both standard and tuned thresholds.
+The malware branch studies explainable static malware detection using EMBER2024 PE features~\cite{JMGPR2024}.
+The first modality is the tabular PE representation already provided by the dataset, while the second modality is an image embedding derived from a compact section-structure representation processed by a CNN.
+This design reflects the intuition that PE files contain both statistical feature evidence and structural evidence, and that combining both may improve detection while supporting richer analyst-facing explanations.
+Accordingly, we compare a Tab-only baseline with a Tab+ImgEmb late-fusion model on the same held-out evaluation protocol.
 
 % The comparative results are summarized in Table 1.
 % 
@@ -226,25 +206,16 @@ Evaluation is conducted under a consistent protocol and includes probability thr
 \subsection{Malware Detection}
 \subsubsection{Data Source and Dataset Representation}
 
-The malware branch is implemented as a static detection problem using an EMBER2024-derived PE feature representation~\cite{JMGPR2024}, grounded in the broader EMBER benchmark tradition of large-scale, reproducible PE malware research~\cite{HP20182018}.
-Each executable is represented as a fixed-dimensional feature vector extracted from intrinsic properties of the PE artifact, and each sample is assigned a binary label indicating benign or malicious class membership.
-This representation is suitable for security triage because it supports efficient batch inference and allows structured explanation outputs at the feature level.
-To support large-scale processing, the dataset is organized in a sharded format where each shard stores a feature matrix and corresponding labels.
-Formally, each shard contains a feature matrix and a label vector, enabling streaming-style loading and memory-safe inference.
-This structure is important because the dataset scale requires repeated passes for training, validation, testing, and explainability generation without relying on full in-memory loading.
-A key implementation detail in this project is strict control of the effective feature dimension used by trained models and explainability routines.
-In the final code-backed pipeline, the tabular branch uses the EMBERv3 feature vector, and the LightGBM experiments are reported on the full tabular representation used by the released scripts.
-This alignment step is necessary because neural network layers are parameterized for a specific input dimensionality, and even a single-feature mismatch prevents strict model reuse and can lead to inconsistent explanations.
+The malware branch is implemented as a static detection problem using an EMBER2024-derived PE representation~\cite{JMGPR2024,HP20182018}.
+Each executable is mapped to a fixed-dimensional feature vector with a binary benign/malicious label, enabling scalable batch inference and feature-level explanation.
+For large-scale processing, the dataset is handled in sharded form for training, validation, testing, and explanation generation.
+In the final code-backed pipeline, the LightGBM experiments use the full EMBERv3 tabular representation released with the scripts, and feature-schema consistency is enforced across preparation, inference, and explainability.
 
 \subsubsection{Preprocessing and Normalization}
 
-Feature scaling is treated as a first-order methodological requirement because deep models trained on heterogeneous feature groups can become unstable or misleading if preprocessing differs between training, inference, and XAI computation.
-In this project, feature normalization statistics are computed on the training split and reused consistently in all later steps.
-Let and denote the per-feature mean and standard deviation estimated from training data.
-For each enforced input vector, the normalized vector is computed as:
-where is a small constant to prevent division-by-zero.
-This project explicitly enforces preprocessing consistency because explanation reliability depends on the model operating in the same numerical feature space that it was trained on.
-Inconsistent normalization can change predicted probabilities and distort gradient-based explanations, which undermines the central objective of producing analyst-usable evidence.
+Preprocessing consistency is treated as a first-order requirement.
+Feature normalization statistics are computed on the training split and reused during inference and explanation generation so that model scores and explanation outputs remain aligned with the trained pipeline.
+This is especially important in analyst-facing settings, where inconsistent preprocessing can distort both probabilities and explanation evidence.
 
 \subsubsection{Model Architectures}
 
@@ -263,13 +234,9 @@ Importantly for this research, the explainability pipeline is aligned to this im
 
 \subsubsection{Evaluation Protocol and Operational Thresholding}
 
-Evaluation is performed on a held-out test split that contains 960,000 samples in the finalized experiment configuration.
-For each test sample, the model outputs a malware probability.
-A decision threshold converts probability into a binary prediction:
-The project reports performance under the conventional operating point and additionally performs a threshold sweep to select an operating threshold optimized for the malicious class F1 score.
-This selection is formalized as:
-The purpose of this step is not to ``inflate'' metrics but to reflect how SOC deployments often require tuned decision boundaries depending on tolerance for false positives versus missed detections.
-The methodology therefore preserves transparency by reporting both the default threshold and the best-F1 threshold.
+Evaluation is performed on a held-out full test split of 960,000 samples.
+The models output malware probabilities, which are converted to binary decisions using both the conventional threshold ($\tau=0.50$) and a threshold selected by a sweep optimized for malicious-class F1.
+Reporting both operating points reflects deployment-style trade-offs between missed malware and analyst workload.
 
 \subsubsection{Explainability Methods}
 
@@ -290,10 +257,8 @@ In this way, SHAP explains the final late-fusion decision, while Grad-CAM provid
 \label{section:implementation-and-results}
 
 
-We implemented two malware detection models operating on engineered static PE feature representations.
-The baseline model is a Tab-only LightGBM classifier that consumes a fixed-length numeric feature vector and outputs a malware probability.
-The main model is a Tab+ImgEmb LightGBM late-fusion classifier that augments the same tabular evidence with an image embedding exported from a CNN-based section model trained on a compact section-structure representation.
-The design goal is practical: keep inference scalable for millions of files while producing analyst-facing evidence rather than a single opaque score.
+We evaluated two malware detection models: a Tab-only LightGBM baseline and a Tab+ImgEmb LightGBM late-fusion model that augments the same tabular evidence with an image embedding exported from a CNN-based section model.
+The design goal is practical: scalable inference for large volumes of files with analyst-facing evidence rather than a single opaque score.
 
 \subsubsection{Decision Rule, Threshold Sweep, and Reported Metrics}
 
@@ -311,21 +276,24 @@ To contextualize these results, we compare them with the official EMBER2024 benc
 The published malicious/benign baseline is reported using threshold-independent operating metrics (ROC AUC = 0.9949 and TPR = 94.48\% at 1\% FPR) [1].
 Although this paper reports thresholded metrics at $\tau = 0.50$ and at the best-F1 operating point, the comparison remains useful because it shows that the proposed system preserves strong separability while also providing analyst-oriented explanations.
 
-\begin{table}[htbp]
+\begin{table}[t]
 \centering
 \caption{Final malware detection results on the full EMBER2024 test set (N=960,000).}
 \label{tab:model_comparison}
-\small
-\setlength{\tabcolsep}{4pt}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.0}
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccccc}
 \hline
 \textbf{Model} & \boldmath$\tau$ & \textbf{AUC} & \textbf{ACC} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} \\
 \hline
 Tab-only LGBM (EMBERv3 2568) & 0.50  & 0.997938 & 0.979406 & 0.9877 & 0.9709 & 0.9792 \\
 Tab+ImgEmb LGBM              & 0.50  & 0.997949 & 0.979481 & 0.9875 & 0.9713 & 0.9793 \\
-Tab+ImgEmb LGBM (best-F1)    & 0.353 & 0.997949 & 0.980175 & 0.9829 & 0.9774 & 0.9801 \\
+Tab+ImgEmb LGBM (F1)    & 0.353 & 0.997949 & 0.980175 & 0.9829 & 0.9774 & 0.9801 \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 
@@ -342,19 +310,11 @@ This threshold-independent view complements the fixed-threshold metrics in Table
 
 The main takeaway is that the fusion model improves recall and F1 while maintaining strong precision, which is important for malware triage where missed malware is typically more costly than additional analyst review.
 
-
-
-%Figure 4.1 provides a compact visualization of the same comparison.
-The main takeaway is that fusion improves recall and F1, meaning it catches more malicious samples while maintaining strong precision.
-%Figure 4.1.
-Malware performance comparison (Accuracy, F1, Recall) for Tab-only and Fusion at two operating points.
-
 \subsubsection{Operational Interpretation}
 
-Table~\ref{tab:operational_counts} translates threshold choices into tangible operational costs.
-In malware triage, False Negatives (FN) correspond to malware that evades blocking and reaches endpoints, while False Positives (FP) correspond to benign files that are incorrectly quarantined or escalated.
-At the default threshold, the model keeps the false-positive rate low while still achieving strong recall.
-At the best-F1 operating point, false negatives are reduced further, at the cost of a moderate increase in false positives.
+Table~\ref{tab:operational_counts} translates threshold choices into operational costs.
+In malware triage, false negatives represent missed malware, while false positives represent benign files incorrectly escalated.
+The best-F1 operating point reduces false negatives further, at the cost of more false positives.
 
 \begin{table}[htbp]
 \centering
@@ -372,22 +332,15 @@ F1 threshold & 0.353 & 471816 & 8184 & 10848 & 469152 & 0.0171 \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:operational_counts} shows the practical trade-off clearly.
-At $\tau=0.50$, the model misses 13,792 malware samples while keeping false positives to 5,906 benign files.
-At $\tau=0.353$, false negatives drop to 10,848, improving recall, while false positives rise to 8,184.
-This trade-off is useful for deployment because threshold selection can be matched to whether missed malware or analyst workload is considered more costly.
+At $\tau=0.50$, the model misses 13,792 malware samples and produces 5,906 false positives.
+At $\tau=0.353$, false negatives drop to 10,848 while false positives rise to 8,184.
+This makes threshold selection a deployment policy choice between missed malware and analyst workload.
 
 \subsubsection{Explainability Report for Malware}
 
-To make malware decisions reviewable, we summarize explanations in a compact tabular format aligned with the implemented late-fusion architecture.
-For the final Tab+ImgEmb LightGBM classifier, SHAP provides signed feature attributions over the fused input vector, where positive values increase the malware score and negative values decrease it.
-To save space, explanation evidence is reported as ranked tables rather than multiple heatmap figures.
-This allows the paper to preserve the decision-support value of the explanations while meeting the page limit.
-
-Global SHAP summary (model-wide feature importance).
-Global SHAP shows which fused features consistently influence predictions across many samples.
-Table 4.2 lists the top-ranked features by mean absolute SHAP magnitude.
-Even when feature identifiers are generic, this ranking remains valuable for reproducibility and for later mapping to broader groups such as tabular PE statistics and image-embedding dimensions.
+To make malware decisions reviewable, explanations are summarized in compact tabular form aligned with the implemented late-fusion architecture.
+For the final Tab+ImgEmb LightGBM classifier, SHAP provides signed feature attributions over the fused input vector, and the strongest global evidence can be ranked by mean absolute SHAP magnitude.
+Even when feature identifiers are generic, these rankings remain useful for reproducibility and later mapping to broader groups such as tabular PE statistics and image-embedding dimensions.
 
 \iffalse
 \begin{table}[htbp]
@@ -420,22 +373,17 @@ Top-ranked global mean absolute SHAP features for the Tab+ImgEmb LightGBM model.
 
 Local explanation summary: four representative case studies.
 
-Local explanations are critical for incident response because analysts validate individual alerts.
-We therefore summarize four representative test cases using compact explanation tables.
-These examples were selected to cover different decision regimes: low-confidence malware, high-confidence benign, high-confidence malware, and a borderline benign case near common operating thresholds.
-
-Table 4.3 summarizes the local explanation evidence for four representative malware samples.
+Local explanations are important for incident response because analysts must validate individual alerts.
+We summarize four representative cases spanning confident and borderline decisions.
 POS increases malware probability, while NEG decreases it.
-A useful detail in interpreting Table 4.3 is that SHAP explanations are signed, so they naturally show both supporting and suppressing evidence.
-In other words, the model may detect some benign-leaning signals even in a malware sample, but the final probability reflects the net effect of all evidence.
-This push-pull behavior is particularly informative for borderline cases because it reveals why the model hesitated.
+Because SHAP explanations are signed, they reveal both supporting and suppressing evidence, which is especially useful in borderline cases.
 
 \subsubsection{What the Malware Results Mean}
 
 The malware results support three conclusions.
 First, the Tab+ImgEmb LightGBM late-fusion model consistently outperforms the tabular-only baseline, indicating that the image-embedding branch contributes complementary information rather than redundant noise.
 Second, the improvement is especially meaningful in recall: at $\tau=0.50$, the fusion model misses fewer malicious samples, which is important because false negatives are often the more costly error in security operations.
-Third, compact explanation tables help justify decisions in uncertain cases by showing how malware-leaning and benign-leaning evidence compete near the operating threshold, which is exactly where analyst review is most valuable.
+Third, explanation evidence helps justify decisions in uncertain cases by showing how malware-leaning and benign-leaning signals compete near the operating threshold, which is exactly where analyst review is most valuable.
 
 \section{Conclusion and Future Work}
 \label{section:conclusion-and-futurework}
@@ -448,14 +396,12 @@ At the best-F1 operating point from the 500-threshold sweep ($\tau=0.353$), perf
 These results support treating threshold selection as an explicit deployment policy choice rather than a fixed default.
 
 The explainability layer improved interpretability of model behavior.
-SHAP provided directional feature attributions for the final LightGBM late-fusion classifier, and Grad-CAM provided structural localization for the CNN-based section model used to generate image-side evidence.
-To keep the paper concise, explanation results are summarized as compact tables rather than multiple heatmap figures.
-A key implementation finding was that strict preprocessing and feature-schema alignment are required for stable probabilities and reproducible explanations.
+SHAP explained the final LightGBM late-fusion classifier, while Grad-CAM provided complementary structural evidence from the CNN-based section model.
+To fit publication constraints, explanation outputs are summarized as compact tables rather than multiple heatmaps.
 
 The results should be interpreted within clear boundaries.
-The evaluation used a prepared split and static labels, so external validity under evolving malware distributions remains an open question.
-Feature-schema consistency across dataset preparation, inference, and explanation generation highlighted the importance of strict version and preprocessing control in practical malware pipelines.
-In addition, attribution outputs should be treated as supporting evidence, not causal proof.
+The evaluation used a prepared split and static labels, so external validity under evolving malware distributions remains open.
+Feature-schema and preprocessing consistency were essential for stable probabilities and reproducible explanations, and attribution outputs should be treated as supporting evidence rather than causal proof.
 
 Future work should prioritize deployment-oriented extensions: (i) richer semantic mapping of fused features and broader evaluation (calibration, precision--recall analysis, and time-split/family-level tests), (ii) standardized analyst evidence cards combining score, decision, top SHAP attributions, and Grad-CAM, and (iii) monitoring/governance for performance drift, explanation drift, dataset versions, feature schemas, and threshold settings.
 
