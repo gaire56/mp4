@@ -24,10 +24,11 @@ Emails: st052439@m2.kcg.edu, a\_shurbevski@kcg.edu, s\_naito@kcg.edu}}
 Security Operations Centers (SOCs) increasingly rely on machine learning to triage large volumes of potentially malicious artifacts, but high-performing models are often difficult to trust because their predictions are opaque.
 This paper presents an Explainable AI (XAI) pipeline for static malware detection from Windows Portable Executable (PE) files that combines strong classification performance with analyst-oriented evidence.
 The method uses EMBER2024-derived tabular PE features and section-level structural representations rendered as compact ``section images,'' then fuses both modalities for malware/benign classification.
-On the held-out full test set (N=960,000), the Tab+ImgEmb LightGBM fusion model achieves ROC-AUC = 0.99795. At the default threshold ($\tau=0.50$), it reaches Accuracy = 0.9795, Precision = 0.9875, Recall = 0.9713, and F1 = 0.9793. At the best-F1 operating point from a 500-threshold sweep ($\tau=0.353$), performance improves to Accuracy = 0.9802, Precision = 0.9829, Recall = 0.9774, and F1 = 0.9801.
-To improve decision transparency, the pipeline integrates SHAP for explanation of the final LightGBM late-fusion classifier and Grad-CAM for structural evidence from the CNN-based section model, summarized compactly to fit publication constraints.
-Results are reported under default and tuned operating thresholds to reflect precision--recall trade-offs relevant to deployment.
-Overall, the study shows that high-performing static malware detection can be paired with interpretable evidence artifacts---model scores, ROC-based operating-point analysis, and ranked feature evidence---that support defensible SOC triage.
+On the held-out full test set, our fusion model achieves ROC-AUC of 0.99795. 
+The highest F1 score of 0.9801 was achieved together with Accuracy of 0.9802, Precision of 0.9829, and Recall of 0.9774.
+To improve decision transparency, the pipeline integrates SHAP for explanation of the fusion classifier and Grad-CAM for structural evidence from the CNN-based section model.
+We report results for a range of confidence operating thresholds, in order to reflect precision--recall trade-offs relevant to deployment.
+Overall, the study shows that high-performing static malware detection can be paired with interpretable evidence artifacts -- model scores, ROC-based operating-point analysis, and ranked feature evidence -- that support defensible SOC triage.
 \end{abstract}
 
 \section{Introduction}
@@ -47,7 +48,7 @@ These actions require accountability.
 If a model behaves as a black box and only provides a label (e.g., malware/benign), analysts face a trust gap: either they accept a decision they cannot justify, or they must re-investigate alerts from scratch, which reduces the operational value of automation.
 The trust gap grows as threats evolve and adversaries manipulate surface cues.
 
-\subsection{Explainable AI and Why It Matters in Cybersecurity}
+\subsection{Explainable AI and Its Role in Cybersecurity}
 
 In this work, explainability is treated as evidence generation: model predictions are accompanied by feature-level and structural evidence that supports analyst verification, reporting, and triage.
 This is especially important in cybersecurity, where high-confidence predictions alone are often insufficient for operational decisions such as escalation, quarantine, or blocking.
@@ -62,9 +63,9 @@ The pipeline is designed to produce strong predictive performance and analyst-or
 The work focuses on static detection using the EMBER2024 PE feature set~\cite{JMGPR2024} and a section-level structural representation derived from executables.
 The scope does not include dynamic malware execution traces, malware family attribution, network intrusion detection, URL crawling, attachment sandboxing, sender reputation systems, or production SOC deployment engineering.
 
-\subsection{Malware Detection Branch: Design and Motivation}
+\subsection{Design and Motivation}
 
-The malware branch studies explainable static malware detection using EMBER2024 PE features~\cite{JMGPR2024}.
+We study explainable static malware detection using EMBER2024 PE features~\cite{JMGPR2024}.
 The first modality is the tabular PE representation already provided by the dataset, while the second modality is an image embedding derived from a compact section-structure representation processed by a CNN.
 This design reflects the intuition that PE files contain both statistical feature evidence and structural evidence, and that combining both may improve detection while supporting richer analyst-facing explanations.
 Accordingly, we compare a Tab-only baseline with a Tab+ImgEmb late-fusion model on the same held-out evaluation protocol.
@@ -138,20 +139,21 @@ Section characteristics: Statistics regarding the size, entropy, and virtual mem
 Import and Export information: Hashed representations of imported libraries, imported functions, and exported symbols, which serve as proxies for the program's capabilities.
 By relying on these pre-calculated engineered features, the EMBER2024 representation enables scalable training and systematic evaluation at the feature level~\cite{JMGPR2024,HP20182018}.
 Benchmark baselines and published results.
-To support reproducible comparison, the EMBER2024 authors also provide official benchmark models and runnable training/evaluation scripts in the public repository (see the examples/ directory)~\cite{JMGPR2024,ember2024github}.
+To support reproducible comparison, the EMBER2024 authors also provide official benchmark models and runnable training/evaluation scripts in a public repository~\cite{JMGPR2024,ember2024github}.
 These baselines are primarily LightGBM classifiers trained on EMBER feature version 3 vectors, intended to serve as reference performance levels for future work.
-For malicious/benign detection, the benchmark LightGBM classifier achieves ROC AUC = 0.9949 and reaches a true positive rate of 94.48\% at a 1\% false positive rate on the EMBER2024 test set~\cite{JMGPR2024}.
-For malware family classification, the benchmark LightGBM model reports accuracy = 67.97\%, with weighted-F1 = 0.6664 and macro-F1 = 0.4371, reflecting the long-tail difficulty across many smaller families~\cite{JMGPR2024}.
-These published baseline results provide a consistent reference point that later experimental results (including ours) should be compared against.
+For malicious/benign detection, the benchmark LightGBM classifier achieves ROC AUC = 0.9949 on the EMBER2024 test set~\cite{JMGPR2024},
+however, for a fixed 1\% false positive rate it reaches a true positive rate of 94.48\%.
+% For malware family classification, the benchmark LightGBM model reports accuracy = 67.97\%, with weighted-F1 = 0.6664 and macro-F1 = 0.4371, reflecting the long-tail difficulty across many smaller families~\cite{JMGPR2024}.
+% These published baseline results provide a consistent reference point that later experimental results (including ours) should be compared against.
 
 \subsubsection{Representation learning from raw bytes and the ``end-to-end'' alternative}
 
-In parallel to engineered-feature pipelines, a competing research direction~\cite{RBSBCN2017,KBSSSK2025} argues that end-to-end models operating directly on raw bytes can discover discriminative patterns without relying on explicit feature design.
+In parallel to engineered-feature pipelines, a competing research direction~\cite{RBSBCN2017,KBSSSK2025} argues that \emph{end-to-end} models operating directly on raw bytes can discover discriminative patterns without relying on explicit feature design.
 MalConv~\cite{RBSBCN2017} is a widely cited example of this idea~\cite{MT2025,EDS2020}, demonstrating that convolutional architectures can ingest long byte sequences to classify executables.
 This family of approaches has expanded the field's understanding~\cite{RCEJH2025,KBSSSK2025} of representation learning for malware, but it also highlights practical constraints that are important for SOC-facing systems: very long sequences increase compute and memory costs~\cite{EDS2020}, truncation or padding choices can affect what the model learns~\cite{RBSBCN2017,AQPWPWCR2022}, and mapping byte-level signals to analyst-friendly evidence can be challenging compared to structured PE features~\cite{NSDSP2025,AQPWPWCR2022}.
 These trade-offs matter to our project design.
 We stay within a controlled, fixed-dimensional representation (tabular PE vectors, plus a compact ``section image'' representation) to keep the pipeline scalable and explanation outputs interpretable.
-In other words, rather than choosing between ``feature engineering'' and ``end-to-end bytes,'' our work aligns with literature~\cite{JMGPR2024,RBSBCN2017} that treats representation choice as an operational design decision: maintain tractable inputs that can support stable training, controlled evaluation, and explanation artifacts that analysts can act on.
+In other words, rather than choosing between ``feature engineering'' and ``end-to-end bytes,'' our work treats representation choice as an operational design decision: maintain tractable inputs that can support stable training, controlled evaluation, and explanation artifacts that analysts can act on.
 
 \subsubsection{Malware-as-image and structural visual encodings}
 
@@ -183,13 +185,13 @@ This distinction is important because it separates explanation of the final deci
 
 A critical point in XAI literature~\cite{DJRLXSWB2020,NSDSP2025} especially relevant to security is that explanation outputs must be reliable, not merely visually appealing.
 Sanity-check research shows that some saliency or explanation methods can fail in subtle ways (e.g., remaining similar even when model parameters or labels are randomized), motivating validation procedures rather than assuming explanation faithfulness by default~\cite{JJMIMB2018}.
-This supports the methodological choice to treat explanation generation and validation as part of system design rather than as a post-hoc screenshot~\cite{SCDVPB2017,LL2017,JJMIMB2018}.
+This supports the methodological choice to treat explanation generation and validation as part of system design rather than as a post-hoc analysis~\cite{SCDVPB2017,LL2017,JJMIMB2018}.
 
 \subsection{Summary and Positioning}
 
 The malware literature shows a consistent trajectory: high-performing models increasingly rely on deep learning and richer representations, but operational adoption in cybersecurity still requires transparent evidence and explanation reliability.
 EMBER-style PE feature benchmarks and multimodal fusion trends motivate our Tab-only baseline and Tab+ImgEmb late-fusion design, while SHAP and Grad-CAM provide explanation modalities aligned to the implemented pipeline~\cite{JMGPR2024,SZS25,SCDVPB2017,LL2017,HP20182018,NKJMB2011}.
-This section motivates controlled and scalable representations, multimodal fusion, and measurable explanation outputs aligned with the implemented pipeline~\cite{JMGPR2024,SZS25,SCDVPB2017,LL2017,JJMIMB2018}.
+This section motivates controlled and scalable representations, multimodal fusion, and measurable explanation outputs aligned with the implemented pipeline.
 
 
 \section{Methodology}
@@ -204,7 +206,7 @@ Evaluation is conducted under a consistent protocol and includes probability thr
 \subsection{Malware Detection}
 \subsubsection{Data Source and Dataset Representation}
 
-The malware branch is implemented as a static detection problem using an EMBER2024-derived PE representation~\cite{JMGPR2024,HP20182018}.
+Malware detection is implemented as a static detection problem using an EMBER2024-derived PE representation~\cite{JMGPR2024,HP20182018}.
 Each executable is mapped to a fixed-dimensional feature vector with a binary benign/malicious label, enabling scalable batch inference and feature-level explanation.
 For large-scale processing, the dataset is handled in sharded form for training, validation, testing, and explanation generation.
 In the final code-backed pipeline, the LightGBM experiments use the full EMBERv3 tabular representation released with the scripts, and feature-schema consistency is enforced across preparation, inference, and explainability.
