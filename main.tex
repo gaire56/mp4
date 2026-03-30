@@ -271,9 +271,9 @@ Because operational malware detection often requires balancing false negatives (
 Table~\ref{tab:model_comparison} summarizes the final test performance for the Tab-only baseline and the Tab+ImgEmb fusion model on the full EMBER2024 test set.
 The fusion model is reported as the primary outcome, while the tabular-only model provides a reference point for quantifying the contribution of the image-embedding branch.
 
-To contextualize these results, we compare them with the official EMBER2024 benchmark reported by Joyce et al. and distributed with example scripts [1, 37].
-The published malicious/benign baseline is reported using threshold-independent operating metrics (ROC AUC = 0.9949 and TPR = 94.48\% at 1\% FPR) [1].
-Although this paper reports thresholded metrics at $\tau = 0.50$ and at the best-F1 operating point, the comparison remains useful because it shows that the proposed system preserves strong separability while also providing analyst-oriented explanations.
+To contextualize these results, we compare them with the official EMBER2024 benchmark reported by Joyce et al.~\cite{JMGPR2024} and distributed with example scripts~\cite{ember2024github}.
+The published malicious/benign baseline is reported using threshold-independent operating metrics, ROC AUC of 0.9949 and PR AUC of 0.9971, whereas for a fixed 1\% FPR, the True Positive rate is reported to be 94.48\%.
+
 
 \begin{table}[t]
 \centering
