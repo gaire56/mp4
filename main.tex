@@ -277,19 +277,25 @@ The published malicious/benign baseline is reported using threshold-independent 
 
 \begin{table}[t]
 \centering
-\caption{Final malware detection results on the full EMBER2024 test set (N=960,000).}
+\caption{Final malware detection results on the full EMBER2024 test set. ROC-AUC and PR-AUC are threshold-independent; the remaining metrics are reported at selected operating points.}
 \label{tab:model_comparison}
 \footnotesize
-\setlength{\tabcolsep}{2.5pt}
-\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{2.2pt}
+\renewcommand{\arraystretch}{1.0}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcccccc}
+\begin{tabular}{lccccccc}
 \hline
-\textbf{Model} & \boldmath$\tau$ & \textbf{AUC} & \textbf{ACC} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} \\
+\textbf{Model / Operating Point} & \boldmath$\tau$ & \textbf{ROC-AUC} & \textbf{PR-AUC} & \textbf{ACC} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} \\
 \hline
-Tab-only LGBM (EMBERv3 2568) & 0.50  & 0.997938 & 0.979406 & 0.9877 & 0.9709 & 0.9792 \\
-Tab+ImgEmb LGBM              & 0.50  & 0.997949 & 0.979481 & 0.9875 & 0.9713 & 0.9793 \\
-Tab+ImgEmb LGBM (F1)    & 0.353 & 0.997949 & 0.980175 & 0.9829 & 0.9774 & 0.9801 \\
+Tab-only LGBM (standard)                    & 0.500 & 0.997938 & 0.99813 & 0.979406 & 0.9877 & 0.9709 & 0.9792 \\
+Tab-only LGBM ($\mathrm{FPR}\approx 1\%$)   & 0.593 & 0.997938 & 0.99813 & 0.978404 & 0.9898 & 0.9668 & 0.9782 \\
+Tab-only LGBM ($\mathrm{FPR}\approx 0.5\%$) & 0.823 & 0.997938 & 0.99813 & 0.972381 & 0.9948 & 0.9498 & 0.9717 \\
+Tab-only LGBM ($\mathrm{FPR}\approx 0.1\%$) & 0.979 & 0.997938 & 0.99813 & 0.944525 & 0.9989 & 0.8901 & 0.9413 \\
+Tab+ImgEmb LGBM (standard)                  & 0.500 & 0.997949 & 0.99805 & 0.979481 & 0.9875 & 0.9713 & 0.9793 \\
+Tab+ImgEmb LGBM (best-F1)                   & 0.353 & 0.997949 & 0.99805 & 0.980175 & 0.9829 & 0.9774 & 0.9801 \\
+Tab+ImgEmb LGBM ($\mathrm{FPR}\approx 1\%$)   & 0.593 & 0.997949 & 0.99805 & 0.978404 & 0.9898 & 0.9668 & 0.9782 \\
+Tab+ImgEmb LGBM ($\mathrm{FPR}\approx 0.5\%$) & 0.823 & 0.997949 & 0.99805 & 0.972381 & 0.9948 & 0.9498 & 0.9717 \\
+Tab+ImgEmb LGBM ($\mathrm{FPR}\approx 0.1\%$) & 0.979 & 0.997949 & 0.99805 & 0.944525 & 0.9989 & 0.8901 & 0.9413 \\
 \hline
 \end{tabular}%
 }
