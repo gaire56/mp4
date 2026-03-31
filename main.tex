@@ -316,18 +316,22 @@ Table~\ref{tab:operational_counts} translates threshold choices into operational
 In malware triage, false negatives represent missed malware, while false positives represent benign files incorrectly escalated.
 The best-F1 operating point reduces false negatives further, at the cost of more false positives.
 
-\begin{table}[htbp]
+\begin{table}[t]
 \centering
-\caption{Operational counts for the final Tab+ImgEmb model on the full EMBER2024 test set.}
-\label{tab:operational_counts}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcccccc}
+\caption{Operational rates for the final Tab+ImgEmb model on the full EMBER2024 test set at selected operating points.}
+\label{tab:operational_rates}
+\footnotesize
+\setlength{\tabcolsep}{10pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}ccccc@{}}
 \hline
-\textbf{Setting} & \boldmath$\tau$ & \textbf{TN} & \textbf{FP} & \textbf{FN} & \textbf{TP} & \textbf{FPR} \\
+\boldmath$\tau$ & \textbf{TPR} & \textbf{FPR} & \textbf{TNR} & \textbf{FNR} \\
 \hline
-Default threshold & 0.50  & 474094 & 5906 & 13792 & 466208 & 0.0123 \\
-F1 threshold & 0.353 & 471816 & 8184 & 10848 & 469152 & 0.0171 \\
+0.353 & 0.9774 & 0.0171 & 0.9829 & 0.0226 \\
+0.500 & 0.9713 & 0.0123 & 0.9877 & 0.0287 \\
+0.593 & 0.9668 & 0.0100 & 0.9900 & 0.0332 \\
+0.823 & 0.9498 & 0.0050 & 0.9950 & 0.0502 \\
+0.979 & 0.8901 & 0.0010 & 0.9990 & 0.1099 \\
 \hline
 \end{tabular}
 \end{table}
