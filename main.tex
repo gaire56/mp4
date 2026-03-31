@@ -268,18 +268,16 @@ Because operational malware detection often requires balancing false negatives (
 
 \subsubsection{Final Test Performance}
 
-Table~\ref{tab:model_comparison} reports both threshold-independent and threshold-specific performance.
-For the final Tab+ImgEmb model, ROC-AUC is 0.99795 and PR-AUC is 0.99805, indicating strong separability and high precision across the recall range.
-At the standard threshold ($\tau=0.50$), the fusion model reaches Accuracy = 0.9795, Precision = 0.9875, Recall = 0.9713, and F1 = 0.9793.
-At the best-F1 operating point ($\tau=0.353$), recall improves to 0.9774 and F1 increases to 0.9801, with a moderate increase in false positives.
-The table also reports thresholds for approximate false-positive-rate regimes of 1\%, 0.5\%, and 0.1\%, which for the fusion model occur at $\tau=0.593$, $\tau=0.823$, and $\tau=0.979$.
-As expected, stricter thresholds increase precision but reduce recall.
-For example, precision rises from 0.9875 at $\tau=0.50$ to 0.9989 near 0.1\% FPR, while recall drops from 0.9713 to 0.8901.
-These results show that threshold selection should be treated as an explicit deployment policy choice rather than a single universal operating point.
+Table~\ref{tab:model_comparison} reports final performance on the full EMBER2024 PE-only test split for the Tab-only and Tab+ImgEmb models.
+For the final Tab+ImgEmb model, ROC-AUC is 0.99795 and PR-AUC is 0.99805.
+At $\tau=0.50$, the model reaches Accuracy = 0.9795, Precision = 0.9875, Recall = 0.9713, and F1 = 0.9793.
+At the best-F1 operating point ($\tau=0.353$), recall improves to 0.9774 and F1 rises to 0.9801.
+The table also reports thresholds corresponding to approximate false-positive-rate regimes of 1\%, 0.5\%, and 0.1\% ($\tau=0.593$, $\tau=0.823$, and $\tau=0.979$ for the fusion model).
+As expected, stricter thresholds increase precision but reduce recall, so threshold selection should be treated as a deployment policy choice rather than a single universal operating point.
 
 \begin{table}[t]
 \centering
-\caption{Final malware detection results on the full EMBER2024 test set. ROC-AUC and PR-AUC are threshold-independent; the remaining metrics are reported at selected operating points.}
+\caption{Final malware detection results on the full EMBER2024 PE-only test split at selected operating points.}
 \label{tab:model_comparison}
 \footnotesize
 \setlength{\tabcolsep}{2.2pt}
@@ -304,7 +302,6 @@ Tab+ImgEmb LGBM ($\mathrm{FPR}\approx 0.1\%$) & 0.979 & 0.997949 & 0.99805 & 0.9
 \vspace{-5mm}
 \end{table}
 
-
 Figure~\ref{fig:roc_curve} shows the ROC curve of the final Tab+ImgEmb model on the full test set.
 The model achieves ROC-AUC = 0.99795, indicating strong class separability across operating thresholds.
 This threshold-independent view complements the fixed-threshold metrics in Table~\ref{tab:model_comparison}.
@@ -322,16 +319,15 @@ The main takeaway is that the fusion model improves recall and F1 while maintain
 
 \subsubsection{Operational Interpretation}
 
-Table~\ref{tab:operational_rates} summarizes operating-point behavior using rates rather than absolute counts.
-As the threshold increases, the false-positive rate decreases, but the false-negative rate increases.
-At the best-F1 operating point ($\tau=0.353$), the model achieves TPR = 0.9774 at FPR = 0.0171.
-At the standard threshold ($\tau=0.50$), TPR is 0.9713 and FPR is 0.0123.
-At stricter operating points, such as $\tau=0.823$ and $\tau=0.979$, the FPR falls to approximately 0.5\% and 0.1\%, respectively, but TPR also decreases to 0.9498 and 0.8901.
-This makes threshold selection a practical deployment choice between missed malware and analyst workload.
+Table~\ref{tab:operational_rates} summarizes operating-point behavior using rates rather than counts.
+As the threshold increases, FPR decreases, but TPR also decreases.
+At $\tau=0.353$, the model achieves TPR = 0.9774 at FPR = 0.0171, while at $\tau=0.500$ it reaches TPR = 0.9713 at FPR = 0.0123.
+At stricter thresholds such as $\tau=0.823$ and $\tau=0.979$, FPR falls to about 0.5\% and 0.1\%, respectively, but TPR also decreases.
+This makes threshold selection a practical choice between missed malware and analyst workload.
 
 \begin{table}[t]
 \centering
-\caption{Operational rates for the final Tab+ImgEmb model on the full EMBER2024 test set at selected operating points.}
+\caption{Operational rates for the final Tab+ImgEmb model on the full EMBER2024 PE-only test set at selected thresholds.}
 \label{tab:operational_rates}
 \footnotesize
 \setlength{\tabcolsep}{10pt}
