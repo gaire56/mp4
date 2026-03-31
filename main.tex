@@ -268,12 +268,14 @@ Because operational malware detection often requires balancing false negatives (
 
 \subsubsection{Final Test Performance}
 
-Table~\ref{tab:model_comparison} summarizes the final test performance for the Tab-only baseline and the Tab+ImgEmb fusion model on the full EMBER2024 test set.
-The fusion model is reported as the primary outcome, while the tabular-only model provides a reference point for quantifying the contribution of the image-embedding branch.
-
-To contextualize these results, we compare them with the official EMBER2024 benchmark reported by Joyce et al.~\cite{JMGPR2024} and distributed with example scripts~\cite{ember2024github}.
-The published malicious/benign baseline is reported using threshold-independent operating metrics, ROC AUC of 0.9949 and PR AUC of 0.9971, whereas for a fixed 1\% FPR, the True Positive rate is reported to be 94.48\%.
-
+Table~\ref{tab:model_comparison} reports both threshold-independent and threshold-specific performance.
+For the final Tab+ImgEmb model, ROC-AUC is 0.99795 and PR-AUC is 0.99805, indicating strong separability and high precision across the recall range.
+At the standard threshold ($\tau=0.50$), the fusion model reaches Accuracy = 0.9795, Precision = 0.9875, Recall = 0.9713, and F1 = 0.9793.
+At the best-F1 operating point ($\tau=0.353$), recall improves to 0.9774 and F1 increases to 0.9801, with a moderate increase in false positives.
+The table also reports thresholds for approximate false-positive-rate regimes of 1\%, 0.5\%, and 0.1\%, which for the fusion model occur at $\tau=0.593$, $\tau=0.823$, and $\tau=0.979$.
+As expected, stricter thresholds increase precision but reduce recall.
+For example, precision rises from 0.9875 at $\tau=0.50$ to 0.9989 near 0.1\% FPR, while recall drops from 0.9713 to 0.8901.
+These results show that threshold selection should be treated as an explicit deployment policy choice rather than a single universal operating point.
 
 \begin{table}[t]
 \centering
@@ -299,6 +301,7 @@ Tab+ImgEmb LGBM ($\mathrm{FPR}\approx 0.1\%$) & 0.979 & 0.997949 & 0.99805 & 0.9
 \hline
 \end{tabular}%
 }
+\vspace{-5mm}
 \end{table}
 
 
@@ -308,19 +311,23 @@ This threshold-independent view complements the fixed-threshold metrics in Table
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.4\textwidth]{curves/ROC_tab_plus_imgemb_full_test.png}
+    \includegraphics[width=0.34\textwidth]{curves/ROC_tab_plus_imgemb_full_test.png}
     \caption{ROC curve of the final Tab+ImgEmb LightGBM model on the EMBER2024 full test set.
     The model achieves a true positive rate of 96.7\% when permitting a 1\% false positive rate, at $\tau = 593$.}
     \label{fig:roc_curve}
+\vspace{-3mm}
 \end{figure}
 
 The main takeaway is that the fusion model improves recall and F1 while maintaining strong precision, which is important for malware triage where missed malware is typically more costly than additional analyst review.
 
 \subsubsection{Operational Interpretation}
 
-Table~\ref{tab:operational_counts} translates threshold choices into operational costs.
-In malware triage, false negatives represent missed malware, while false positives represent benign files incorrectly escalated.
-The best-F1 operating point reduces false negatives further, at the cost of more false positives.
+Table~\ref{tab:operational_rates} summarizes operating-point behavior using rates rather than absolute counts.
+As the threshold increases, the false-positive rate decreases, but the false-negative rate increases.
+At the best-F1 operating point ($\tau=0.353$), the model achieves TPR = 0.9774 at FPR = 0.0171.
+At the standard threshold ($\tau=0.50$), TPR is 0.9713 and FPR is 0.0123.
+At stricter operating points, such as $\tau=0.823$ and $\tau=0.979$, the FPR falls to approximately 0.5\% and 0.1\%, respectively, but TPR also decreases to 0.9498 and 0.8901.
+This makes threshold selection a practical deployment choice between missed malware and analyst workload.
 
 \begin{table}[t]
 \centering
@@ -340,6 +347,7 @@ The best-F1 operating point reduces false negatives further, at the cost of more
 0.979 & 0.8901 & 0.0010 & 0.9990 & 0.1099 \\
 \hline
 \end{tabular}
+\vspace{-5mm}
 \end{table}
 
 At $\tau=0.50$, the model misses 13,792 malware samples and produces 5,906 false positives.
