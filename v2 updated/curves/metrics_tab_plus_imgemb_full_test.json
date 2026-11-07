@@ -1,0 +1,16 @@
+{
+  "name": "tab_plus_imgemb_full_test",
+  "n": 960000,
+  "pos_rate": 0.5,
+  "roc_auc": 0.997948925859375,
+  "pr_auc_ap": 0.9981278506147655,
+  "tpr_at_fpr": {
+    "0.001": 0.8897958333333333,
+    "0.01": 0.9668208333333334,
+    "0.05": 0.9908625
+  },
+  "files": {
+    "roc_png": "outputs/12_metrics/EMBER2024_CORE_PE_tab_plus_imgemb_full_test_scores_v1/final_curves/ROC_tab_plus_imgemb_full_test.png",
+    "pr_png": "outputs/12_metrics/EMBER2024_CORE_PE_tab_plus_imgemb_full_test_scores_v1/final_curves/PR_tab_plus_imgemb_full_test.png"
+  }
+}

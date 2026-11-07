@@ -1,0 +1,146 @@
+[
+  {
+    "file_type": "Win32",
+    "base": "2024-10-27_2024-11-02_Win32_test",
+    "row": 15019,
+    "label": 0,
+    "structural_probability": 0.10172544419765472,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win32_00_2024-10-27_2024-11-02_Win32_test_row15019_cam.npy"
+  },
+  {
+    "file_type": "Win32",
+    "base": "2024-11-17_2024-11-23_Win32_test",
+    "row": 23326,
+    "label": 1,
+    "structural_probability": 0.9987058639526367,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win32_01_2024-11-17_2024-11-23_Win32_test_row23326_cam.npy"
+  },
+  {
+    "file_type": "Win32",
+    "base": "2024-11-17_2024-11-23_Win32_test",
+    "row": 24109,
+    "label": 1,
+    "structural_probability": 0.9998674392700195,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win32_02_2024-11-17_2024-11-23_Win32_test_row24109_cam.npy"
+  },
+  {
+    "file_type": "Win64",
+    "base": "2024-11-24_2024-11-30_Win64_test",
+    "row": 8435,
+    "label": 0,
+    "structural_probability": 0.0168178491294384,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win64_00_2024-11-24_2024-11-30_Win64_test_row8435_cam.npy"
+  },
+  {
+    "file_type": "Win64",
+    "base": "2024-09-22_2024-09-28_Win64_test",
+    "row": 6757,
+    "label": 1,
+    "structural_probability": 0.9998553991317749,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win64_01_2024-09-22_2024-09-28_Win64_test_row6757_cam.npy"
+  },
+  {
+    "file_type": "Win64",
+    "base": "2024-11-10_2024-11-16_Win64_test",
+    "row": 5053,
+    "label": 0,
+    "structural_probability": 0.04079185426235199,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/Win64_02_2024-11-10_2024-11-16_Win64_test_row5053_cam.npy"
+  },
+  {
+    "file_type": "NET",
+    "base": "2024-10-27_2024-11-02_Dot_Net_test",
+    "row": 4721,
+    "label": 1,
+    "structural_probability": 0.8534712791442871,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/NET_00_2024-10-27_2024-11-02_Dot_Net_test_row4721_cam.npy"
+  },
+  {
+    "file_type": "NET",
+    "base": "2024-10-20_2024-10-26_Dot_Net_test",
+    "row": 2033,
+    "label": 0,
+    "structural_probability": 0.010134022682905197,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/NET_01_2024-10-20_2024-10-26_Dot_Net_test_row2033_cam.npy"
+  },
+  {
+    "file_type": "NET",
+    "base": "2024-11-24_2024-11-30_Dot_Net_test",
+    "row": 4248,
+    "label": 0,
+    "structural_probability": 0.871886670589447,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/NET_02_2024-11-24_2024-11-30_Dot_Net_test_row4248_cam.npy"
+  },
+  {
+    "file_type": "APK",
+    "base": "2024-11-10_2024-11-16_APK_test",
+    "row": 3029,
+    "label": 1,
+    "structural_probability": 0.6651862263679504,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/APK_00_2024-11-10_2024-11-16_APK_test_row3029_cam.npy"
+  },
+  {
+    "file_type": "APK",
+    "base": "2024-11-03_2024-11-09_APK_test",
+    "row": 2588,
+    "label": 0,
+    "structural_probability": 0.23617805540561676,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/APK_01_2024-11-03_2024-11-09_APK_test_row2588_cam.npy"
+  },
+  {
+    "file_type": "APK",
+    "base": "2024-11-24_2024-11-30_APK_test",
+    "row": 2849,
+    "label": 1,
+    "structural_probability": 0.25681042671203613,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/APK_02_2024-11-24_2024-11-30_APK_test_row2849_cam.npy"
+  },
+  {
+    "file_type": "ELF",
+    "base": "2024-09-22_2024-09-28_ELF_test",
+    "row": 237,
+    "label": 1,
+    "structural_probability": 0.5150066018104553,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/ELF_00_2024-09-22_2024-09-28_ELF_test_row237_cam.npy"
+  },
+  {
+    "file_type": "ELF",
+    "base": "2024-09-29_2024-10-05_ELF_test",
+    "row": 462,
+    "label": 1,
+    "structural_probability": 0.7452090382575989,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/ELF_01_2024-09-29_2024-10-05_ELF_test_row462_cam.npy"
+  },
+  {
+    "file_type": "ELF",
+    "base": "2024-11-24_2024-11-30_ELF_test",
+    "row": 386,
+    "label": 1,
+    "structural_probability": 0.73675936460495,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/ELF_02_2024-11-24_2024-11-30_ELF_test_row386_cam.npy"
+  },
+  {
+    "file_type": "PDF",
+    "base": "2024-12-08_2024-12-14_PDF_test",
+    "row": 4,
+    "label": 1,
+    "structural_probability": 0.5068932175636292,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/PDF_00_2024-12-08_2024-12-14_PDF_test_row4_cam.npy"
+  },
+  {
+    "file_type": "PDF",
+    "base": "2024-11-03_2024-11-09_PDF_test",
+    "row": 784,
+    "label": 0,
+    "structural_probability": 0.05677157640457153,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/PDF_01_2024-11-03_2024-11-09_PDF_test_row784_cam.npy"
+  },
+  {
+    "file_type": "PDF",
+    "base": "2024-09-29_2024-10-05_PDF_test",
+    "row": 162,
+    "label": 1,
+    "structural_probability": 0.31831416487693787,
+    "cam": "outputs/EMBER2024_MULTIFORMAT_FUSION_CLEAN_v1/06_explainability/emb64_15k_leaves256_final/gradcam/PDF_02_2024-09-29_2024-10-05_PDF_test_row162_cam.npy"
+  }
+]
