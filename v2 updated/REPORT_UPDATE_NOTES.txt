@@ -1,0 +1,14 @@
+Updated research report based on the original Gaire-AI_for_malware_detection.tex.
+
+Principles used in this revision:
+1. The original WETICE-stage PE-only research is retained as Phase I rather than deleted.
+2. Current clean EMBER2024 multiformat findings are added as Phase II.
+3. The local duplicated-shard issue is described as a local data-preparation problem, not an official EMBER2024 defect.
+4. Final Phase-II results use the official-count population: 2,626,000 train and 606,000 test files.
+5. The supervisor-requested Joyce et al. comparison is curve-based and uses the released all-files benchmark model on the identical clean test set.
+6. Low-FPR results use max TPR subject to FPR <= 1%, 0.5%, and 0.1%.
+7. SHAP is described as explaining the final LightGBM classifier. Grad-CAM is explicitly limited to the structural CNN pathway.
+8. Only the completed Win32 true specialist is reported; unfinished specialists are not presented as results.
+
+The results/ directory contains the CSV/JSON artifacts used for the new tables and XAI discussion.
+The original TeX is preserved as Gaire-AI_for_malware_detection_ORIGINAL.tex.
